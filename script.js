@@ -1,17 +1,82 @@
+// ----------------------------------------------------
+// [기본 데이터 구조]
+// ----------------------------------------------------
+let siteData = {
+    summary: {
+        title: "사업안내",
+        subItems: [
+            { name: "사업개요", images: ["images/s1.jpg"] },
+            { name: "시공사", images: ["images/s2.jpg"] },
+            { name: "프리미엄", images: ["images/s3.jpg"] }
+        ]
+    },
+    layout: {
+        title: "단지안내",
+        subItems: [
+            { name: "단지 배치도", images: ["images/d1.jpg"] },
+            { name: "동·호수 배치도", images: ["images/d2.jpg"] },
+            { name: "커뮤니티 시설", images: ["images/d3.jpg"] },
+            { name: "엘리베이터", images: ["images/d4.jpg"] },
+            { name: "주차 배치도", images: ["images/d5.jpg"] }
+        ]
+    },
+    location: {
+        title: "입지환경",
+        subItems: [
+            { name: "입지환경", images: ["images/e1.jpg"] },
+            { name: "주변 시세 비교", images: ["images/e2.jpg"] }
+        ]
+    },
+    units: {
+        title: "타입안내",
+        subItems: [
+            { name: "59A 타입", images: ["images/59a.jpg"] },
+            { name: "59B 타입", images: ["images/59b.jpg"] },
+            { name: "84 타입", images: ["images/84.jpg"] },
+            { name: "44 오피스텔", images: ["images/44.jpg"] }
+        ]
+    },
+    price: {
+        title: "분양안내",
+        subItems: [
+            { name: "아파트 분양가", images: ["images/b1.png"] },
+            { name: "오피스텔 분양가", images: ["images/b2.jpg"] },
+            { name: "특별 혜택 분석", images: ["images/b3.jpg"] }
+        ]
+    },
+    officetel: {
+        title: "계약안내",
+        subItems: [
+            { name: "납부계좌", images: ["images/g1.jpg"] }
+        ]
+    }
+};
+
 let isEditMode = false;
 let currentMain = Object.keys(siteData)[0] || 'summary';
 let currentSubIndex = 0;
 let currentLogoUrl = 'images/rogo.png';
 
+// SortableJS 변수 선언
+let sortablePrimaryDesktop = null;
+let sortablePrimaryMobile = null;
+let sortableSecondaryDesktop = null;
+let sortableSecondaryMobile = null;
+
+// 터치/핑치 줌 상태 변수
+let touchState = {
+    scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0
+};
+
 // ----------------------------------------------------
-// [로고 이미지 변경 기능]
+// [로고 이미지 변경 및 UI 동기화]
 // ----------------------------------------------------
 function changeSiteLogo(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     if (currentLogoUrl && currentLogoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(currentLogoUrl); // 기존 메모리 해제
+        URL.revokeObjectURL(currentLogoUrl); // 이전 메모리 해제
     }
 
     currentLogoUrl = URL.createObjectURL(file);
@@ -26,6 +91,9 @@ function updateLogoUI() {
     });
 }
 
+// ----------------------------------------------------
+// [편집 모드 토글]
+// ----------------------------------------------------
 function toggleEditMode() {
     isEditMode = !isEditMode;
 
@@ -70,6 +138,147 @@ function toggleEditMode() {
     initNav();
 }
 
+// ----------------------------------------------------
+// [이미지 터치/핑치 줌 및 드래그]
+// ----------------------------------------------------
+function resetImgTransform() {
+    touchState = { scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0 };
+    applyImgTransform();
+}
+
+function applyImgTransform() {
+    const imgEl = document.querySelector('#contentDisplayArea img');
+    if (imgEl) {
+        imgEl.style.transform = `translate(${touchState.posX}px, ${touchState.posY}px) scale(${touchState.scale})`;
+        imgEl.style.transition = touchState.isDragging ? 'none' : 'transform 0.15s ease-out';
+    }
+}
+
+function initImageTouchEvents() {
+    const displayArea = document.getElementById('contentDisplayArea');
+    if (!displayArea) return;
+
+    displayArea.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            touchState.startDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        } else if (e.touches.length === 1) {
+            const now = Date.now();
+            if (now - touchState.lastTapTime < 300) {
+                touchState.scale = touchState.scale > 1.2 ? 1 : 2.5;
+                if (touchState.scale === 1) { touchState.posX = 0; touchState.posY = 0; }
+                applyImgTransform();
+            }
+            touchState.lastTapTime = now;
+            touchState.startX = e.touches[0].clientX - touchState.posX;
+            touchState.startY = e.touches[0].clientY - touchState.posY;
+            touchState.isDragging = true;
+        }
+    }, { passive: false });
+
+    displayArea.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && touchState.startDist > 0) {
+            e.preventDefault();
+            const currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            const factor = currentDist / touchState.startDist;
+            let newScale = touchState.scale * factor;
+            touchState.scale = Math.min(Math.max(newScale, 1), 4);
+            touchState.startDist = currentDist;
+            if (touchState.scale === 1) { touchState.posX = 0; touchState.posY = 0; }
+            applyImgTransform();
+        } else if (e.touches.length === 1 && touchState.scale > 1 && touchState.isDragging) {
+            e.preventDefault();
+            touchState.posX = e.touches[0].clientX - touchState.startX;
+            touchState.posY = e.touches[0].clientY - touchState.startY;
+            applyImgTransform();
+        }
+    }, { passive: false });
+
+    displayArea.addEventListener('touchend', (e) => {
+        touchState.isDragging = false;
+        if (e.touches.length < 2) touchState.startDist = 0;
+    });
+}
+
+// ----------------------------------------------------
+// [목차 추가 및 삭제 로직]
+// ----------------------------------------------------
+function addMainCategory() {
+    const title = prompt("새 메인 목차 이름을 입력하세요:");
+    if (!title || !title.trim()) return;
+    const newKey = 'cat_' + Date.now();
+    siteData[newKey] = { title: title.trim(), subItems: [] };
+    currentMain = newKey;
+    currentSubIndex = 0;
+    initNav();
+}
+
+function deleteMainCategory(key, event) {
+    if (event) event.stopPropagation();
+    if (!confirm(`'${siteData[key].title}' 삭제하시겠습니까?`)) return;
+    delete siteData[key];
+    const keys = Object.keys(siteData);
+    currentMain = keys.length > 0 ? keys[0] : null;
+    currentSubIndex = 0;
+    initNav();
+}
+
+function addSubCategory() {
+    if (!currentMain || !siteData[currentMain]) return;
+    const subName = prompt("새 서브 목차 이름을 입력하세요:");
+    if (!subName || !subName.trim()) return;
+    siteData[currentMain].subItems.push({ name: subName.trim(), images: [] });
+    currentSubIndex = siteData[currentMain].subItems.length - 1;
+    renderSecondaryNav();
+}
+
+function deleteSubCategory(index, event) {
+    if (event) event.stopPropagation();
+    if (!confirm("서브 목차를 삭제하시겠습니까?")) return;
+    siteData[currentMain].subItems.splice(index, 1);
+    currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
+    renderSecondaryNav();
+}
+
+// ----------------------------------------------------
+// [이미지 업로드 (Blob URL 사용으로 버벅거림 방지) 및 삭제]
+// ----------------------------------------------------
+function addImageToCurrentSub(event) {
+    const file = event.target.files[0];
+    if (!file || !currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
+
+    const currentSub = siteData[currentMain].subItems[currentSubIndex];
+    
+    // 메모리에 가벼운 로컬 Blob URL 생성
+    const blobUrl = URL.createObjectURL(file);
+    currentSub.images = [blobUrl];
+    renderContent();
+    event.target.value = '';
+}
+
+function deleteCurrentImage() {
+    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
+    if (!confirm("현재 이미지를 삭제하시겠습니까?")) return;
+
+    siteData[currentMain].subItems[currentSubIndex].images = [];
+    renderContent();
+}
+
+// ----------------------------------------------------
+// [순서 변경 - DOM 순서 기반 추출]
+// ----------------------------------------------------
+function updateMainOrderFromDOM(container) {
+    const items = container.querySelectorAll('.main-nav-item');
+    const newSiteData = {};
+    items.forEach(item => {
+        const key = item.getAttribute('data-key');
+        if (key && siteData[key]) {
+            newSiteData[key] = siteData[key];
+        }
+    });
+    siteData = newSiteData;
+    initNav();
+}
+
 function updateSubOrderFromDOM(container) {
     if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems) return;
     const items = container.querySelectorAll('.sub-nav-item');
@@ -103,8 +312,8 @@ function initSortableEvents() {
     const options = {
         handle: '.drag-handle',
         animation: 150,
-        forceFallback: true,        // 모바일/PC 모두 터치 캔버스 활성화
-        fallbackTolerance: 2,       // 2px 이동 시 드래그 시작
+        forceFallback: true,        // 모바일/PC 터치 캔버스 활성화
+        fallbackTolerance: 2,       // 2px 이상 드래그 시 반응
         ghostClass: 'bg-emerald-900/40',
         filter: '.no-drag'
     };
@@ -144,6 +353,9 @@ function initSubSortableEvents() {
     }
 }
 
+// ----------------------------------------------------
+// [네비게이션 렌더링]
+// ----------------------------------------------------
 function initNav() {
     const primaryNavDesktop = document.getElementById('primaryNavDesktop');
     const primaryNavMobile = document.getElementById('primaryNavMobile');
@@ -266,6 +478,9 @@ function renderSecondaryNav() {
     renderContent();
 }
 
+// ----------------------------------------------------
+// [메인 콘텐츠 영역 렌더링]
+// ----------------------------------------------------
 function renderContent() {
     resetImgTransform();
     const display = document.getElementById('contentDisplayArea');
@@ -343,14 +558,83 @@ function toggleFullScreen() {
     else if (document.exitFullscreen) document.exitFullscreen();
 }
 
+// ----------------------------------------------------
+// [로딩 화면 프로그레스 및 안전 자동 닫기]
+// ----------------------------------------------------
+function preloadAllImagesWithProgress() {
+    const imageUrls = [];
+    if (siteData) {
+        Object.values(siteData).forEach(category => {
+            if (category.subItems) {
+                category.subItems.forEach(sub => {
+                    if (sub.images && Array.isArray(sub.images)) {
+                        imageUrls.push(...sub.images);
+                    }
+                });
+            }
+        });
+    }
+
+    const percentEl = document.getElementById('loadingPercent');
+    const progressBar = document.getElementById('loadingProgressBar');
+    const statusText = document.getElementById('loadingStatusText');
+    const loadingScreen = document.getElementById('loadingScreen');
+
+    function hideLoadingScreen() {
+        if (loadingScreen) {
+            loadingScreen.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+            }, 500);
+        }
+    }
+
+    if (imageUrls.length === 0) {
+        if (percentEl) percentEl.innerText = '100%';
+        if (progressBar) progressBar.style.width = '100%';
+        setTimeout(hideLoadingScreen, 300);
+        return;
+    }
+
+    let loadedCount = 0;
+    const totalCount = imageUrls.length;
+
+    function updateProgress() {
+        loadedCount++;
+        const percent = Math.min(Math.round((loadedCount / totalCount) * 100), 100);
+        if (percentEl) percentEl.innerText = `${percent}%`;
+        if (progressBar) progressBar.style.width = `${percent}%`;
+
+        if (loadedCount >= totalCount) {
+            if (statusText) statusText.innerHTML = `<i class="fa-solid fa-circle-check"></i> 로딩 완료!`;
+            setTimeout(hideLoadingScreen, 400);
+        }
+    }
+
+    // 1.5초 후 자동 닫기 보장 (버퍼링 무한 멈춤 완전 방지)
+    setTimeout(() => {
+        if (percentEl) percentEl.innerText = '100%';
+        if (progressBar) progressBar.style.width = '100%';
+        hideLoadingScreen();
+    }, 1500);
+
+    imageUrls.forEach(url => {
+        if (!url || url.startsWith('data:') || url.startsWith('blob:')) {
+            updateProgress();
+        } else {
+            const img = new Image();
+            img.onload = updateProgress;
+            img.onerror = updateProgress;
+            img.src = url;
+        }
+    });
+}
+
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoomModal(); });
 
 document.addEventListener('DOMContentLoaded', () => {
     initNav();
     initImageTouchEvents();
     updateLogoUI();
-    setTimeout(() => {
-        const ls = document.getElementById('loadingScreen');
-        if (ls) { ls.classList.add('opacity-0'); setTimeout(() => ls.style.display='none', 500); }
-    }, 600);
+    preloadAllImagesWithProgress();
 });
