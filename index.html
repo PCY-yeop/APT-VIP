@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VIP 프라이빗 브리핑북</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="라온스카이브">
+    <meta name="theme-color" content="#0d1b3e">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SortableJS 드래그 앤 드롭 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <link rel="stylesheet" href="css/desktop.css">
+</head>
+
+<body class="bg-slate-100 text-gray-800 h-screen w-screen overflow-hidden flex flex-col md:flex-row select-none">
+
+    <!-- 로딩 화면 -->
+    <div id="loadingScreen" class="fixed inset-0 bg-[#0d1b3e] z-50 flex flex-col items-center justify-center p-6 text-white transition-opacity duration-500">
+        <div class="mb-6 text-center">
+            <img id="splashLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/200x70/0d1b3e/ffffff?text=RAON+PRIVATE';" class="h-12 md:h-16 w-auto mx-auto mb-3 object-contain">
+            <h1 class="text-lg md:text-xl font-bold tracking-tight text-slate-100">숭의역 라온프라이빗 스카이브</h1>
+            <p class="text-xs text-slate-400 mt-1">VIP 프라이빗 브리핑북</p>
+        </div>
+        <div class="w-full max-w-xs bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-2xl flex flex-col items-center">
+            <div class="flex justify-between items-center w-full mb-2">
+                <span id="loadingStatusText" class="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                    <i class="fa-solid fa-spinner fa-spin"></i> 브리핑 자료 준비 중...
+                </span>
+                <span id="loadingPercent" class="text-sm font-extrabold text-white">0%</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+                <div id="loadingProgressBar" class="h-full bg-emerald-500 w-0 transition-all duration-150 rounded-full"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- [모바일 상단 레이아웃] -->
+    <div class="flex flex-col md:hidden flex-shrink-0 z-30 raon-main text-white shadow-md">
+        <div class="h-12 px-4 flex items-center justify-between border-b border-white/10">
+            <div class="flex items-center gap-2">
+                <div class="relative group">
+                    <img id="mobileLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/120x40/0d1b3e/ffffff?text=LOGO';" class="h-7 w-auto object-contain">
+                    <label id="mobileLogoEditBtn" class="hidden absolute -inset-1 bg-black/60 rounded flex items-center justify-center text-amber-300 text-[10px] cursor-pointer font-bold">
+                        <i class="fa-solid fa-camera mr-1"></i> 변경
+                        <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
+                    </label>
+                </div>
+                <span class="text-xs font-bold text-slate-300">VIP 브리핑북</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="editToggleBtnMobile" onclick="toggleEditMode()" class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span id="editToggleTextMobile">편집하기</span>
+                </button>
+                <button onclick="toggleFullScreen()" class="text-slate-300 p-1.5 text-xs">
+                    <i class="fa-solid fa-expand"></i>
+                </button>
+            </div>
+        </div>
+        <nav class="flex overflow-x-auto gap-1.5 p-2 no-scrollbar bg-slate-900/50 border-b border-white/5" id="primaryNavMobile"></nav>
+        <div class="flex items-center justify-between gap-2 px-2 py-1.5 bg-slate-800/90 overflow-x-auto no-scrollbar">
+            <div class="flex gap-1.5 overflow-x-auto no-scrollbar flex-1" id="secondaryNavMobile"></div>
+            <button onclick="openZoomModal()" type="button" class="flex-shrink-0 py-1 px-2.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shadow">
+                <i class="fa-solid fa-magnifying-glass-plus"></i> 크게보기
+            </button>
+        </div>
+    </div>
+
+    <!-- [PC 좌측 사이드바] -->
+    <aside class="hidden md:flex w-56 raon-main text-white flex-col justify-between items-center py-5 px-3 flex-shrink-0 z-20 shadow-xl h-full">
+        <div class="w-full flex flex-col items-center flex-1 min-h-0">
+            <div class="mb-5 text-center px-1 flex-shrink-0 relative group w-full">
+                <img id="desktopLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/160x60/0d1b3e/ffffff?text=logo.png';" class="max-h-14 w-auto mx-auto mb-1.5 object-contain">
+                <label id="desktopLogoEditBtn" class="hidden absolute inset-0 bg-black/70 rounded-xl flex items-center justify-center text-emerald-300 text-xs font-bold cursor-pointer transition-all border border-emerald-500/50 hover:bg-black/80">
+                    <i class="fa-solid fa-camera mr-1.5"></i> 로고 변경
+                    <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
+                </label>
+            </div>
+            <nav class="w-full flex flex-col gap-2.5 overflow-y-auto flex-1 pr-1" id="primaryNavDesktop"></nav>
+        </div>
+    </aside>
+
+    <aside class="hidden md:flex w-52 bg-slate-200 border-r border-slate-300 py-6 px-3 flex-col justify-between flex-shrink-0 z-10 shadow-inner h-full">
+        <div class="flex flex-col min-h-0 flex-1 overflow-hidden">
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 px-2 flex items-center justify-between flex-shrink-0">
+                <span id="subCategoryTitle">세부목록</span>
+            </div>
+            <div class="flex flex-col gap-2 overflow-y-auto flex-1 pr-1 mb-3" id="secondaryNavDesktop"></div>
+        </div>
+        <div class="pt-3 border-t border-slate-300 flex-shrink-0">
+            <button onclick="openZoomModal()" type="button" class="w-full py-2.5 px-2 bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow">
+                <i class="fa-solid fa-magnifying-glass-plus text-emerald-400"></i> 이미지 크게보기
+            </button>
+        </div>
+    </aside>
+
+    <!-- [우측 메인 콘텐츠] -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+        <header class="hidden md:flex h-12 bg-white border-b border-gray-200 px-6 items-center justify-between shadow-sm flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-md" id="currentCategoryBadge">사업개요</span>
+                <i class="fa-solid fa-chevron-right text-xs text-gray-400"></i>
+                <h2 class="text-sm md:text-base font-bold text-gray-900" id="currentContentTitle">건축개요 및 사업안내</h2>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="editToggleBtnDesktop" onclick="toggleEditMode()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition-all active:scale-95">
+                    <i class="fa-solid fa-pen-to-square"></i> <span id="editToggleTextDesktop">편집하기</span>
+                </button>
+                <div id="modeStatusBadge" class="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>상담 전용 모드</span>
+                </div>
+                <button onclick="toggleFullScreen()" class="text-gray-600 hover:text-slate-900 text-sm p-1.5 rounded-lg hover:bg-gray-100" title="전체화면">
+                    <i class="fa-solid fa-expand"></i>
+                </button>
+            </div>
+        </header>
+
+        <section class="flex-1 p-2 md:p-4 overflow-hidden flex items-center justify-center bg-slate-900/10 relative touch-none" id="contentDisplayArea"></section>
+
+        <footer class="h-4 bg-slate-800 text-slate-400 text-[9px] px-4 flex items-center justify-between flex-shrink-0 z-10">
+            <span>※ 본 자료는 이해를 돕기 위한 브리핑 자료로 실제 인허가 과정에서 변동될 수 있습니다.</span>
+        </footer>
+    </main>
+
+    <!-- 이미지 확대 모달 -->
+    <div id="imageZoomModal" class="hidden fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-2 select-none" onclick="closeZoomModal()">
+        <button onclick="closeZoomModal()" class="absolute top-4 right-5 text-white/80 hover:text-white bg-slate-800/80 p-2.5 rounded-full z-50 flex items-center justify-center w-10 h-10 shadow-lg">
+            <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+        <div class="relative w-full h-full flex items-center justify-center p-2" onclick="event.stopPropagation()">
+            <img id="zoomedImage" src="" alt="확대 이미지" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl">
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

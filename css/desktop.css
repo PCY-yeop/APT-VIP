@@ -1,0 +1,27 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+:root {
+  --main-color: #0d1b3e;
+  --accent-color: #1b4d24;
+}
+
+* {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  touch-action: manipulation;
+}
+
+/* 터치 지연 드래그 앤 드롭을 위한 클래스 */
+.drag-handle {
+  touch-action: none; /* 브라우저 스크롤 제어 방지 */
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.raon-main { background-color: var(--main-color) !important; }
+.raon-accent { background-color: var(--accent-color) !important; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
