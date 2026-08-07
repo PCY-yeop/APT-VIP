@@ -1,4 +1,4 @@
-const SUPABASE_URL = "https://lmkpwupeinkqbfmhqcrc.supabase.co/rest/v1/";       // <--- 본인 Supabase Project URL 입력
+const SUPABASE_URL = "https://lmkpwupeinkqbfmhqcrc.supabase.co";       // <--- 본인 Supabase Project URL 입력
 const SUPABASE_ANON_KEY = "sb_publishable_BrgcLKyjLU7et47zEocZdQ_mNvmFNbo";     // <--- 본인 게시 가능한 키(anon key) 입력
 
 // Supabase 클라이언트 초기화
