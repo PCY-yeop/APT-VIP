@@ -1,5 +1,5 @@
 // ----------------------------------------------------
-// [전역 상태 변수]
+// [전역 상태 변수 및 데이터 표준화]
 // ----------------------------------------------------
 let currentUser = null;
 let currentSiteId = null;
@@ -18,6 +18,29 @@ let sortableSecondaryMobile = null;
 
 let touchState = { scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0 };
 let editingSiteId = null;
+
+// [핵심] 모든 메인 및 서브 목차 데이터의 고유 ID 및 구조를 안전하게 보정
+function normalizeSiteData(data) {
+    if (!data || typeof data !== 'object') return {};
+    const normalized = {};
+    
+    Object.keys(data).forEach(catKey => {
+        const cat = data[catKey];
+        if (cat && typeof cat === 'object') {
+            const subItems = Array.isArray(cat.subItems) ? cat.subItems : [];
+            normalized[catKey] = {
+                id: catKey,
+                title: cat.title || "제목 없음",
+                subItems: subItems.map((sub, idx) => ({
+                    id: sub.id || `sub_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+                    name: sub.name || "서브목차",
+                    images: Array.isArray(sub.images) ? sub.images : []
+                }))
+            };
+        }
+    });
+    return normalized;
+}
 
 // ----------------------------------------------------
 // [1. 초기 실행 및 Supabase 인증 세션 검사]
@@ -46,7 +69,6 @@ function showAuthModal() {
 }
 
 function showLobbyModal() {
-    // 로비 진입 시 이전 작업 현장의 상태값 완벽 초기화
     currentSiteId = null;
     siteData = {};
     isEditMode = false;
@@ -59,7 +81,6 @@ function showLobbyModal() {
     loadUserSites();
 }
 
-// 편집 상태 UI 강제 리셋 함수
 function resetEditUI() {
     const btnDesktop = document.getElementById('editToggleBtnDesktop');
     const textDesktop = document.getElementById('editToggleTextDesktop');
@@ -264,7 +285,6 @@ function cancelEditSiteName(event) {
     renderSiteList();
 }
 
-// [개선 1] 타임스탬프 기반 고유 키를 가진 100% 독립된 깨끗한 기본 틀로 생성
 async function createNewSite() {
     const siteName = prompt("새 분양 현장 이름을 입력하세요:");
     if (!siteName || !siteName.trim()) return;
@@ -272,15 +292,10 @@ async function createNewSite() {
     const now = Date.now();
     const freshData = {
         [`cat_${now}_1`]: {
+            id: `cat_${now}_1`,
             title: "사업안내",
             subItems: [
-                { name: "사업개요", images: [] }
-            ]
-        },
-        [`cat_${now}_2`]: {
-            title: "단지안내",
-            subItems: [
-                { name: "단지 배치도", images: [] }
+                { id: `sub_${now}_1`, name: "사업개요", images: [] }
             ]
         }
     };
@@ -309,14 +324,13 @@ async function deleteSite(siteId, event) {
     }
 }
 
-// [개선 2] 현장 선택 시 깊은 복사(Deep Clone) 및 상태값 완전 초기화
 function selectSite(siteId) {
     currentSiteId = siteId;
     const site = userSites.find(s => s.id === siteId);
     if (!site) return;
 
-    // 데이터 복제를 통한 참조 혼선 차단
-    siteData = JSON.parse(JSON.stringify(site.data || {}));
+    // 현장 데이터의 복제 및 정상 구조 재보정
+    siteData = normalizeSiteData(site.data || {});
     isEditMode = false;
     resetEditUI();
 
@@ -332,11 +346,15 @@ function selectSite(siteId) {
 }
 
 async function saveCurrentSiteData() {
-    if (!currentSiteId || !currentUser) return;
-    await window.supabaseClient
-        .from('sites')
-        .update({ data: siteData })
-        .eq('id', currentSiteId);
+    if (!currentSiteId || !currentUser || !window.supabaseClient) return;
+    try {
+        await window.supabaseClient
+            .from('sites')
+            .update({ data: siteData })
+            .eq('id', currentSiteId);
+    } catch(err) {
+        console.error("클라우드 동기화 실패:", err);
+    }
 }
 
 // ----------------------------------------------------
@@ -373,38 +391,55 @@ function toggleEditMode() {
 function updateMainOrderFromDOM(container) {
     const items = container.querySelectorAll('.main-nav-item');
     const newSiteData = {};
+    
     items.forEach(item => {
         const key = item.getAttribute('data-key');
         if (key && siteData[key]) {
             newSiteData[key] = siteData[key];
         }
     });
+
+    // 누락 방지 안전 장치: DOM에 빠진 키가 있더라도 데이터 유지
+    Object.keys(siteData).forEach(key => {
+        if (!newSiteData[key]) {
+            newSiteData[key] = siteData[key];
+        }
+    });
+
     siteData = newSiteData;
     saveCurrentSiteData();
     initNav();
 }
 
 function updateSubOrderFromDOM(container) {
-    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems) return;
+    if (!currentMain || !siteData[currentMain] || !Array.isArray(siteData[currentMain].subItems)) return;
+
+    // 현재 열린 메인 카테고리와 DOM 컨테이너의 타겟 카테고리가 일치하는지 strict 검사
+    const containerMainKey = container.getAttribute('data-main-key');
+    if (containerMainKey !== currentMain) return;
+
     const items = container.querySelectorAll('.sub-nav-item');
-    const currentSubItems = siteData[currentMain].subItems;
-    const activeSub = currentSubItems[currentSubIndex];
+    const existingSubItems = siteData[currentMain].subItems;
+    const subMap = new Map(existingSubItems.map(item => [item.id, item]));
 
     const newSubItems = [];
     items.forEach(item => {
-        const idx = parseInt(item.getAttribute('data-index'), 10);
-        if (!isNaN(idx) && currentSubItems[idx]) {
-            newSubItems.push(currentSubItems[idx]);
+        const subId = item.getAttribute('data-sub-id');
+        if (subId && subMap.has(subId)) {
+            newSubItems.push(subMap.get(subId));
+            subMap.delete(subId);
         }
+    });
+
+    // 드래그 대상에 포함되지 않은 기존 항목 복원 (데이터 유실 방지)
+    subMap.forEach(remainingItem => {
+        newSubItems.push(remainingItem);
     });
 
     siteData[currentMain].subItems = newSubItems;
 
-    if (activeSub) {
-        const newIdx = newSubItems.indexOf(activeSub);
-        currentSubIndex = newIdx !== -1 ? newIdx : 0;
-    } else {
-        currentSubIndex = 0;
+    if (currentSubIndex >= newSubItems.length) {
+        currentSubIndex = Math.max(0, newSubItems.length - 1);
     }
 
     saveCurrentSiteData();
@@ -465,8 +500,14 @@ function initSubSortableEvents() {
 function addMainCategory() {
     const title = prompt("새 메인 목차 이름을 입력하세요:");
     if (!title || !title.trim()) return;
+    
     const newKey = 'cat_' + Date.now();
-    siteData[newKey] = { title: title.trim(), subItems: [] };
+    siteData[newKey] = {
+        id: newKey,
+        title: title.trim(),
+        subItems: []
+    };
+    
     currentMain = newKey;
     currentSubIndex = 0;
     saveCurrentSiteData();
@@ -489,11 +530,17 @@ function addSubCategory() {
     const subName = prompt("새 서브 목차 이름을 입력하세요:");
     if (!subName || !subName.trim()) return;
     
-    if (!siteData[currentMain].subItems) {
+    if (!Array.isArray(siteData[currentMain].subItems)) {
         siteData[currentMain].subItems = [];
     }
 
-    siteData[currentMain].subItems.push({ name: subName.trim(), images: [] });
+    const newSub = {
+        id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: subName.trim(),
+        images: []
+    };
+
+    siteData[currentMain].subItems.push(newSub);
     currentSubIndex = siteData[currentMain].subItems.length - 1;
     saveCurrentSiteData();
     renderSecondaryNav();
@@ -502,10 +549,13 @@ function addSubCategory() {
 function deleteSubCategory(index, event) {
     if (event) event.stopPropagation();
     if (!confirm("서브 목차를 삭제하시겠습니까?")) return;
-    siteData[currentMain].subItems.splice(index, 1);
-    currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
-    saveCurrentSiteData();
-    renderSecondaryNav();
+    
+    if (siteData[currentMain] && Array.isArray(siteData[currentMain].subItems)) {
+        siteData[currentMain].subItems.splice(index, 1);
+        currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
+        saveCurrentSiteData();
+        renderSecondaryNav();
+    }
 }
 
 function addImageToCurrentSub(event) {
@@ -600,8 +650,7 @@ function initNav() {
     if (primaryNavMobile) primaryNavMobile.innerHTML = '';
 
     const keys = Object.keys(siteData);
-
-    // 목차가 비어있는 경우에도 편집 모드 시 추가 버튼이 사라지지 않도록 보장
+    
     if (keys.length === 0) {
         currentMain = null;
         if (primaryNavDesktop && isEditMode) {
@@ -628,7 +677,6 @@ function initNav() {
             btn.className = `main-nav-item w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between shadow-sm flex-shrink-0 border cursor-pointer ${isActive ? 'bg-[#1b4d24] text-white border-emerald-600' : 'bg-white text-slate-800 hover:bg-slate-100 border-transparent'}`;
             btn.setAttribute('data-key', key);
 
-            // 전체 탭 클릭 바인딩 (이벤트 누락 방지)
             btn.onclick = (e) => {
                 if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
                 currentMain = key;
@@ -687,8 +735,14 @@ function renderSecondaryNav() {
     const secondaryNavMobile = document.getElementById('secondaryNavMobile');
     const subTitle = document.getElementById('subCategoryTitle');
 
-    if (secondaryNavDesktop) secondaryNavDesktop.innerHTML = '';
-    if (secondaryNavMobile) secondaryNavMobile.innerHTML = '';
+    if (secondaryNavDesktop) {
+        secondaryNavDesktop.innerHTML = '';
+        if (currentMain) secondaryNavDesktop.setAttribute('data-main-key', currentMain);
+    }
+    if (secondaryNavMobile) {
+        secondaryNavMobile.innerHTML = '';
+        if (currentMain) secondaryNavMobile.setAttribute('data-main-key', currentMain);
+    }
 
     if (!currentMain || !siteData[currentMain]) {
         if (subTitle) subTitle.innerText = "세부목록";
@@ -699,7 +753,7 @@ function renderSecondaryNav() {
     const currentObj = siteData[currentMain];
     if (subTitle) subTitle.innerText = currentObj.title;
 
-    if (!currentObj.subItems) {
+    if (!Array.isArray(currentObj.subItems)) {
         currentObj.subItems = [];
     }
 
@@ -709,7 +763,7 @@ function renderSecondaryNav() {
         if (secondaryNavDesktop) {
             const btn = document.createElement('div');
             btn.className = `sub-nav-item w-full py-2 px-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-between flex-shrink-0 border cursor-pointer ${isActive ? 'bg-[#0d1b3e] text-white font-bold border-slate-600 shadow-md' : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'}`;
-            btn.setAttribute('data-index', index);
+            btn.setAttribute('data-sub-id', sub.id);
 
             btn.onclick = (e) => {
                 if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
@@ -733,7 +787,7 @@ function renderSecondaryNav() {
         if (secondaryNavMobile) {
             const btnM = document.createElement('div');
             btnM.className = `sub-nav-item py-1 px-2.5 rounded-md text-[12px] font-semibold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-1.5 cursor-pointer ${isActive ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-700 border border-slate-300'}`;
-            btnM.setAttribute('data-index', index);
+            btnM.setAttribute('data-sub-id', sub.id);
 
             btnM.onclick = (e) => {
                 if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
@@ -778,12 +832,17 @@ function renderContent() {
     const display = document.getElementById('contentDisplayArea');
     if (!display) return;
 
-    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems || siteData[currentMain].subItems.length === 0) {
+    if (!currentMain || !siteData[currentMain] || !Array.isArray(siteData[currentMain].subItems) || siteData[currentMain].subItems.length === 0) {
         display.innerHTML = `<div class="text-white text-sm">항목이 없습니다.</div>`;
         return;
     }
 
     const currentSub = siteData[currentMain].subItems[currentSubIndex];
+    if (!currentSub) {
+        display.innerHTML = `<div class="text-white text-sm">항목을 선택해 주세요.</div>`;
+        return;
+    }
+
     document.getElementById('currentCategoryBadge').innerText = siteData[currentMain].title;
     document.getElementById('currentContentTitle').innerText = currentSub.name;
 
