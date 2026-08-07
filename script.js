@@ -659,9 +659,12 @@ function renderSecondaryNav() {
                 btnM.setAttribute('data-index', index);
 
                 const dragSubMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 text-[10px] py-1 px-0.5" onclick="event.stopPropagation()"></i>` : '';
+                const delSubMobileHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-red-500 ml-1 p-0.5"><i class="fa-solid fa-xmark text-[11px]"></i></button>` : '';
+
                 btnM.innerHTML = `
                     ${dragSubMobileHtml}
                     <span class="cursor-pointer" onclick="currentSubIndex=${index}; renderSecondaryNav();">${sub.name}</span>
+                    ${delSubMobileHtml}
                 `;
                 secondaryNavMobile.appendChild(btnM);
             }
@@ -674,6 +677,14 @@ function renderSecondaryNav() {
         addSubBtn.onclick = addSubCategory;
         addSubBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 서브목차 추가`;
         secondaryNavDesktop.appendChild(addSubBtn);
+    }
+
+    if (secondaryNavMobile && isEditMode) {
+        const addSubBtnMobile = document.createElement('button');
+        addSubBtnMobile.className = "no-drag py-1 px-2.5 rounded-md text-[12px] font-bold bg-emerald-600 text-white flex-shrink-0 flex items-center gap-1 shadow active:scale-95";
+        addSubBtnMobile.onclick = addSubCategory;
+        addSubBtnMobile.innerHTML = `<i class="fa-solid fa-plus text-[10px]"></i> 추가`;
+        secondaryNavMobile.appendChild(addSubBtnMobile);
     }
 
     initSubSortableEvents();
