@@ -323,19 +323,31 @@ async function loadUserSites() {
         return;
     }
 
-    const { data, error } = await window.supabaseClient
-        .from('sites')
-        .select('id, name, created_at, updated_at')
-        .order('created_at', { ascending: false });
+    try {
+        let { data, error } = await window.supabaseClient
+            .from('sites')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error("데이터 로드 오류:", error);
-        container.innerHTML = `<div class="col-span-full text-center text-rose-400 py-16">데이터를 불러오지 못했습니다. DB 연결을 확인해 주세요.</div>`;
-        return;
+        if (error) {
+            console.warn("created_at 정렬 조회 실패, 기본 조회 시도:", error);
+            const fallback = await window.supabaseClient.from('sites').select('*');
+            data = fallback.data;
+            error = fallback.error;
+        }
+
+        if (error) {
+            console.error("데이터 로드 오류:", error);
+            container.innerHTML = `<div class="col-span-full text-center text-rose-400 py-16">데이터를 불러오지 못했습니다. DB 연결 및 RLS 권한을 확인해 주세요.</div>`;
+            return;
+        }
+
+        userSites = data || [];
+        renderSiteList();
+    } catch(err) {
+        console.error("Supabase 통신 오류:", err);
+        container.innerHTML = `<div class="col-span-full text-center text-rose-400 py-16">서버와 연결할 수 없습니다.</div>`;
     }
-
-    userSites = data || [];
-    renderSiteList();
 }
 
 function renderSiteList() {
