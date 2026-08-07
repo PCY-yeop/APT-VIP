@@ -9,7 +9,6 @@ let siteData = {};
 let isEditMode = false;
 let currentMain = null;
 let currentSubIndex = 0;
-let currentLogoUrl = 'images/rogo.png';
 
 let sortablePrimaryDesktop = null;
 let sortablePrimaryMobile = null;
@@ -19,7 +18,7 @@ let sortableSecondaryMobile = null;
 let touchState = { scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0 };
 let editingSiteId = null;
 
-// [핵심] 모든 메인 및 서브 목차 데이터의 고유 ID 및 구조를 안전하게 보정
+// 모든 메인 및 서브 목차 데이터 구조 보정 (고유 ID 할당)
 function normalizeSiteData(data) {
     if (!data || typeof data !== 'object') return {};
     const normalized = {};
@@ -40,6 +39,36 @@ function normalizeSiteData(data) {
         }
     });
     return normalized;
+}
+
+// ----------------------------------------------------
+// [커스텀 알림/모달 유틸리티 (alert/confirm 대체)]
+// ----------------------------------------------------
+function showToast(message, isError = false) {
+    let container = document.getElementById('customToastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'customToastContainer';
+        container.className = 'fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-3 rounded-xl text-xs font-bold text-white shadow-2xl flex items-center gap-2 pointer-events-auto transition-all transform translate-y-[-10px] opacity-0 ${isError ? 'bg-rose-600' : 'bg-emerald-600'}`;
+    toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> <span>${message}</span>`;
+    
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+    }, 10);
+
+    setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 // ----------------------------------------------------
@@ -126,7 +155,7 @@ function initAuthEvents() {
             const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
             
             if (error) {
-                alert("로그인 실패: 아이디 또는 비밀번호를 확인해 주세요.");
+                showToast("로그인 실패: 아이디 또는 비밀번호를 확인해 주세요.", true);
             } else {
                 currentUser = data.user;
                 showLobbyModal();
@@ -144,11 +173,12 @@ function initAuthEvents() {
             const { data, error } = await window.supabaseClient.auth.signUp({ email, password });
 
             if (error) {
-                alert("회원가입 실패: " + error.message);
+                showToast("회원가입 실패: " + error.message, true);
             } else {
-                alert(`'${userId}' 계정이 생성되었습니다! 로그인해 주세요.`);
-                toggleAuthMode('login');
-                document.getElementById('authUserId').value = userId;
+                showToast(`'${userId}' 계정이 생성되었습니다! 로그인해 주세요.`);
+                if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
+                const authInput = document.getElementById('authUserId');
+                if (authInput) authInput.value = userId;
             }
         });
     }
@@ -170,7 +200,7 @@ async function loadUserSites() {
 
     if (error) {
         console.error("데이터 로드 오류:", error);
-        container.innerHTML = `<div class="col-span-full text-center text-red-400 py-16">데이터를 불러오지 못했습니다. DB 설정을 확인해 주세요.</div>`;
+        container.innerHTML = `<div class="col-span-full text-center text-rose-400 py-16">데이터를 불러오지 못했습니다. DB 설정을 확인해 주세요.</div>`;
         return;
     }
 
@@ -221,7 +251,7 @@ function renderSiteList() {
                             <button onclick="startEditSiteName('${site.id}', event)" class="text-slate-400 hover:text-emerald-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors" title="이름 수정">
                                 <i class="fa-solid fa-pen-to-square text-xs"></i>
                             </button>
-                            <button onclick="deleteSite('${site.id}', event)" class="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors" title="현장 삭제">
+                            <button onclick="deleteSite('${site.id}', event)" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors" title="현장 삭제">
                                 <i class="fa-solid fa-trash-can text-xs"></i>
                             </button>
                         </div>
@@ -262,7 +292,7 @@ async function saveSiteName(siteId, event) {
 
     const newName = input.value.trim();
     if (!newName) {
-        alert("현장 이름을 입력해 주세요.");
+        showToast("현장 이름을 입력해 주세요.", true);
         return;
     }
 
@@ -272,9 +302,10 @@ async function saveSiteName(siteId, event) {
         .eq('id', siteId);
 
     if (error) {
-        alert("이름 수정 실패: " + error.message);
+        showToast("이름 수정 실패: " + error.message, true);
     } else {
         editingSiteId = null;
+        showToast("현장 이름이 수정되었습니다.");
         loadUserSites();
     }
 }
@@ -305,22 +336,29 @@ async function createNewSite() {
         .insert([{ user_id: currentUser.id, name: siteName.trim(), data: freshData }]);
 
     if (error) {
-        alert("현장 추가 실패: " + error.message);
+        showToast("현장 추가 실패: " + error.message, true);
     } else {
+        showToast("새 현장이 생성되었습니다.");
         loadUserSites();
     }
 }
 
 async function deleteSite(siteId, event) {
     if (event) event.stopPropagation();
-    if (!confirm("해당 현장과 모든 브리핑북 자료가 서버에서 완전히 삭제됩니다. 진행하시겠습니까?")) return;
-
-    const { error } = await window.supabaseClient.from('sites').delete().eq('id', siteId);
-
-    if (error) {
-        alert("삭제 실패: " + error.message);
+    
+    if (typeof openConfirmModal === 'function') {
+        openConfirmModal("현장 삭제", "해당 현장과 모든 브리핑북 자료가 서버에서 완전히 삭제됩니다. 진행하시겠습니까?", async () => {
+            const { error } = await window.supabaseClient.from('sites').delete().eq('id', siteId);
+            if (error) {
+                showToast("삭제 실패: " + error.message, true);
+            } else {
+                showToast("현장이 삭제되었습니다.");
+                loadUserSites();
+            }
+        });
     } else {
-        loadUserSites();
+        const { error } = await window.supabaseClient.from('sites').delete().eq('id', siteId);
+        if (!error) loadUserSites();
     }
 }
 
@@ -329,7 +367,6 @@ function selectSite(siteId) {
     const site = userSites.find(s => s.id === siteId);
     if (!site) return;
 
-    // 현장 데이터의 복제 및 정상 구조 재보정
     siteData = normalizeSiteData(site.data || {});
     isEditMode = false;
     resetEditUI();
@@ -381,9 +418,11 @@ function toggleEditMode() {
         if (statusBadge) {
             statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span><span class="text-amber-700 font-bold">편집 모드</span>`;
         }
+        showToast("편집 모드가 활성화되었습니다.");
     } else {
         resetEditUI();
         saveCurrentSiteData();
+        showToast("변경사항이 클라우드에 저장되었습니다.");
     }
     initNav();
 }
@@ -399,7 +438,6 @@ function updateMainOrderFromDOM(container) {
         }
     });
 
-    // 누락 방지 안전 장치: DOM에 빠진 키가 있더라도 데이터 유지
     Object.keys(siteData).forEach(key => {
         if (!newSiteData[key]) {
             newSiteData[key] = siteData[key];
@@ -414,7 +452,6 @@ function updateMainOrderFromDOM(container) {
 function updateSubOrderFromDOM(container) {
     if (!currentMain || !siteData[currentMain] || !Array.isArray(siteData[currentMain].subItems)) return;
 
-    // 현재 열린 메인 카테고리와 DOM 컨테이너의 타겟 카테고리가 일치하는지 strict 검사
     const containerMainKey = container.getAttribute('data-main-key');
     if (containerMainKey !== currentMain) return;
 
@@ -431,7 +468,6 @@ function updateSubOrderFromDOM(container) {
         }
     });
 
-    // 드래그 대상에 포함되지 않은 기존 항목 복원 (데이터 유실 방지)
     subMap.forEach(remainingItem => {
         newSubItems.push(remainingItem);
     });
@@ -453,8 +489,6 @@ function initSortableEvents() {
     const options = {
         handle: '.drag-handle',
         animation: 150,
-        forceFallback: true,
-        fallbackTolerance: 2,
         ghostClass: 'bg-emerald-900/40',
         filter: '.no-drag'
     };
@@ -477,8 +511,6 @@ function initSubSortableEvents() {
     const options = {
         handle: '.drag-handle',
         animation: 150,
-        forceFallback: true,
-        fallbackTolerance: 2,
         ghostClass: 'bg-slate-300',
         filter: '.no-drag'
     };
@@ -516,13 +548,25 @@ function addMainCategory() {
 
 function deleteMainCategory(key, event) {
     if (event) event.stopPropagation();
-    if (!confirm(`'${siteData[key].title}' 삭제하시겠습니까?`)) return;
-    delete siteData[key];
-    const keys = Object.keys(siteData);
-    currentMain = keys.length > 0 ? keys[0] : null;
-    currentSubIndex = 0;
-    saveCurrentSiteData();
-    initNav();
+    
+    const catName = siteData[key] ? siteData[key].title : '메인목차';
+    if (typeof openConfirmModal === 'function') {
+        openConfirmModal("메인목차 삭제", `'${catName}' 카테고리를 삭제하시겠습니까?`, () => {
+            delete siteData[key];
+            const keys = Object.keys(siteData);
+            currentMain = keys.length > 0 ? keys[0] : null;
+            currentSubIndex = 0;
+            saveCurrentSiteData();
+            initNav();
+        });
+    } else {
+        delete siteData[key];
+        const keys = Object.keys(siteData);
+        currentMain = keys.length > 0 ? keys[0] : null;
+        currentSubIndex = 0;
+        saveCurrentSiteData();
+        initNav();
+    }
 }
 
 function addSubCategory() {
@@ -548,13 +592,23 @@ function addSubCategory() {
 
 function deleteSubCategory(index, event) {
     if (event) event.stopPropagation();
-    if (!confirm("서브 목차를 삭제하시겠습니까?")) return;
     
-    if (siteData[currentMain] && Array.isArray(siteData[currentMain].subItems)) {
-        siteData[currentMain].subItems.splice(index, 1);
-        currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
-        saveCurrentSiteData();
-        renderSecondaryNav();
+    if (typeof openConfirmModal === 'function') {
+        openConfirmModal("서브목차 삭제", "서브 목차를 삭제하시겠습니까?", () => {
+            if (siteData[currentMain] && Array.isArray(siteData[currentMain].subItems)) {
+                siteData[currentMain].subItems.splice(index, 1);
+                currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
+                saveCurrentSiteData();
+                renderSecondaryNav();
+            }
+        });
+    } else {
+        if (siteData[currentMain] && Array.isArray(siteData[currentMain].subItems)) {
+            siteData[currentMain].subItems.splice(index, 1);
+            currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
+            saveCurrentSiteData();
+            renderSecondaryNav();
+        }
     }
 }
 
@@ -575,16 +629,305 @@ function addImageToCurrentSub(event) {
 
 function deleteCurrentImage() {
     if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
-    if (!confirm("현재 이미지를 삭제하시겠습니까?")) return;
+    
+    if (typeof openConfirmModal === 'function') {
+        openConfirmModal("이미지 삭제", "현재 이미지를 삭제하시겠습니까?", () => {
+            siteData[currentMain].subItems[currentSubIndex].images = [];
+            saveCurrentSiteData();
+            renderContent();
+        });
+    } else {
+        siteData[currentMain].subItems[currentSubIndex].images = [];
+        saveCurrentSiteData();
+        renderContent();
+    }
+}
 
-    siteData[currentMain].subItems[currentSubIndex].images = [];
-    saveCurrentSiteData();
+// ----------------------------------------------------
+// [6. 네비게이션 및 콘텐츠 렌더링 (클릭 이벤트 가로채기 방지)]
+// ----------------------------------------------------
+function initNav() {
+    const primaryNavDesktop = document.getElementById('primaryNavDesktop');
+    const primaryNavMobile = document.getElementById('primaryNavMobile');
+    if (primaryNavDesktop) primaryNavDesktop.innerHTML = '';
+    if (primaryNavMobile) primaryNavMobile.innerHTML = '';
+
+    const keys = Object.keys(siteData);
+    
+    if (keys.length === 0) {
+        currentMain = null;
+        if (primaryNavDesktop && isEditMode) {
+            const addBtn = document.createElement('button');
+            addBtn.className = "no-drag w-full py-2 px-3 rounded-xl text-xs font-bold border-2 border-dashed border-emerald-400/50 hover:border-emerald-400 text-emerald-300 flex items-center justify-center gap-1 mt-2";
+            addBtn.onclick = addMainCategory;
+            addBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 메인목차 추가`;
+            primaryNavDesktop.appendChild(addBtn);
+        }
+        renderSecondaryNav();
+        return;
+    }
+
+    if (!currentMain || !siteData[currentMain]) {
+        currentMain = keys[0];
+    }
+
+    keys.forEach(key => {
+        const item = siteData[key];
+        const isActive = key === currentMain;
+
+        // [PC 전용 메인 목차]
+        if (primaryNavDesktop) {
+            const btn = document.createElement('div');
+            btn.className = `main-nav-item w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between shadow-sm flex-shrink-0 border cursor-pointer select-none ${isActive ? 'bg-[#1b4d24] text-white border-emerald-600' : 'bg-white text-slate-800 hover:bg-slate-100 border-transparent'}`;
+            btn.setAttribute('data-key', key);
+
+            const dragHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 hover:text-emerald-300 mr-2.5 py-1 px-1 text-sm cursor-grab active:cursor-grabbing" onclick="event.stopPropagation()"></i>` : '';
+            const delHtml = isEditMode ? `<button onclick="deleteMainCategory('${key}', event)" class="text-rose-400 hover:text-rose-200 p-1 rounded hover:bg-rose-900/30"><i class="fa-solid fa-xmark"></i></button>` : '';
+
+            btn.innerHTML = `
+                ${dragHtml}
+                <div class="flex-1 truncate py-0.5">
+                    <span class="truncate pointer-events-none">${item.title}</span>
+                </div>
+                ${delHtml}
+            `;
+
+            // 클릭 이벤트 독립 핸들링 (Sortable 가로채기 방지)
+            const handleMainClick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (currentMain !== key) {
+                    currentMain = key;
+                    currentSubIndex = 0;
+                    initNav();
+                }
+            };
+
+            btn.addEventListener('click', handleMainClick);
+            primaryNavDesktop.appendChild(btn);
+        }
+
+        // [모바일 전용 메인 목차]
+        if (primaryNavMobile) {
+            const btnM = document.createElement('div');
+            btnM.className = `main-nav-item py-1.5 px-3 rounded-lg text-[14px] font-bold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-2 shadow cursor-pointer select-none ${isActive ? 'bg-[#1b4d24] text-white' : 'bg-white/10 text-slate-200'}`;
+            btnM.setAttribute('data-key', key);
+
+            const dragMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-300 text-xs py-1 px-1" onclick="event.stopPropagation()"></i>` : '';
+            btnM.innerHTML = `
+                ${dragMobileHtml}
+                <span class="pointer-events-none">${item.title}</span>
+            `;
+
+            const handleMainMobileClick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (currentMain !== key) {
+                    currentMain = key;
+                    currentSubIndex = 0;
+                    initNav();
+                }
+            };
+
+            // touchend와 click 이중 호출로 인한 이중전환(Phantom Click) 버그 제거
+            btnM.addEventListener('click', handleMainMobileClick);
+            primaryNavMobile.appendChild(btnM);
+        }
+    });
+
+    if (primaryNavDesktop && isEditMode) {
+        const addBtn = document.createElement('button');
+        addBtn.className = "no-drag w-full py-2 px-3 rounded-xl text-xs font-bold border-2 border-dashed border-emerald-400/50 hover:border-emerald-400 text-emerald-300 flex items-center justify-center gap-1 mt-2";
+        addBtn.onclick = addMainCategory;
+        addBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 메인목차 추가`;
+        primaryNavDesktop.appendChild(addBtn);
+    }
+
+    initSortableEvents();
+    renderSecondaryNav();
+}
+
+function renderSecondaryNav() {
+    const secondaryNavDesktop = document.getElementById('secondaryNavDesktop');
+    const secondaryNavMobile = document.getElementById('secondaryNavMobile');
+    const subTitle = document.getElementById('subCategoryTitle');
+
+    if (secondaryNavDesktop) {
+        secondaryNavDesktop.innerHTML = '';
+        if (currentMain) secondaryNavDesktop.setAttribute('data-main-key', currentMain);
+    }
+    if (secondaryNavMobile) {
+        secondaryNavMobile.innerHTML = '';
+        if (currentMain) secondaryNavMobile.setAttribute('data-main-key', currentMain);
+    }
+
+    // currentMain이 유효하지 않은 경우 안전 예외 처리
+    if (!currentMain || !siteData[currentMain]) {
+        if (subTitle) subTitle.innerText = "세부목록";
+        renderContent();
+        return;
+    }
+
+    const currentObj = siteData[currentMain];
+    if (subTitle) subTitle.innerText = currentObj.title;
+
+    if (!Array.isArray(currentObj.subItems)) {
+        currentObj.subItems = [];
+    }
+
+    // 선택된 currentMain의 서브목차만 1:1 강제 매핑 렌더링
+    currentObj.subItems.forEach((sub, index) => {
+        const isActive = index === currentSubIndex;
+
+        if (secondaryNavDesktop) {
+            const btn = document.createElement('div');
+            btn.className = `sub-nav-item w-full py-2 px-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-between flex-shrink-0 border cursor-pointer select-none ${isActive ? 'bg-[#0d1b3e] text-white font-bold border-slate-600 shadow-md' : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'}`;
+            btn.setAttribute('data-sub-id', sub.id);
+
+            const dragSubHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 hover:text-slate-600 mr-2 py-1 px-1 cursor-grab active:cursor-grabbing text-xs" onclick="event.stopPropagation()"></i>` : '';
+            const delSubHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
+
+            btn.innerHTML = `
+                ${dragSubHtml}
+                <div class="flex-1 truncate py-0.5">
+                    <span class="truncate pointer-events-none">${sub.name}</span>
+                </div>
+                ${delSubHtml}
+            `;
+
+            const handleSubClick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                currentSubIndex = index;
+                renderSecondaryNav();
+            };
+
+            btn.addEventListener('click', handleSubClick);
+            secondaryNavDesktop.appendChild(btn);
+        }
+
+        if (secondaryNavMobile) {
+            const btnM = document.createElement('div');
+            btnM.className = `sub-nav-item py-1 px-2.5 rounded-md text-[12px] font-semibold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-1.5 cursor-pointer select-none ${isActive ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-700 border border-slate-300'}`;
+            btnM.setAttribute('data-sub-id', sub.id);
+
+            const dragSubMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 text-[10px] py-1 px-0.5" onclick="event.stopPropagation()"></i>` : '';
+            const delSubMobileHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-rose-500 ml-1 p-0.5"><i class="fa-solid fa-xmark text-[11px]"></i></button>` : '';
+
+            btnM.innerHTML = `
+                ${dragSubMobileHtml}
+                <span class="pointer-events-none">${sub.name}</span>
+                ${delSubMobileHtml}
+            `;
+
+            const handleSubMobileClick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                currentSubIndex = index;
+                renderSecondaryNav();
+            };
+
+            // 모바일 터치 이중 이벤트 제어
+            btnM.addEventListener('click', handleSubMobileClick);
+            secondaryNavMobile.appendChild(btnM);
+        }
+    });
+
+    if (secondaryNavDesktop && isEditMode) {
+        const addSubBtn = document.createElement('button');
+        addSubBtn.className = "no-drag w-full py-2 px-2.5 rounded-lg text-xs font-bold border-2 border-dashed border-slate-400 hover:border-slate-600 text-slate-600 flex items-center justify-center gap-1 mt-2";
+        addSubBtn.onclick = addSubCategory;
+        addSubBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 서브목차 추가`;
+        secondaryNavDesktop.appendChild(addSubBtn);
+    }
+
+    if (secondaryNavMobile && isEditMode) {
+        const addSubBtnMobile = document.createElement('button');
+        addSubBtnMobile.className = "no-drag py-1 px-2.5 rounded-md text-[12px] font-bold bg-emerald-600 text-white flex-shrink-0 flex items-center gap-1 shadow active:scale-95";
+        addSubBtnMobile.onclick = addSubCategory;
+        addSubBtnMobile.innerHTML = `<i class="fa-solid fa-plus text-[10px]"></i> 추가`;
+        secondaryNavMobile.appendChild(addSubBtnMobile);
+    }
+
+    initSubSortableEvents();
     renderContent();
 }
 
 // ----------------------------------------------------
-// [6. UI 및 이미지 터치/줌]
+// [7. 브리핑 이미지 및 헤더 동기화 렌더링]
 // ----------------------------------------------------
+function renderContent() {
+    resetImgTransform();
+    const display = document.getElementById('contentDisplayArea');
+    const badgeEl = document.getElementById('currentCategoryBadge');
+    const titleEl = document.getElementById('currentContentTitle');
+
+    // 카테고리 뱃지 및 메인 제목 동기화
+    if (badgeEl) {
+        badgeEl.innerText = (currentMain && siteData[currentMain]) ? siteData[currentMain].title : "사업안내";
+    }
+
+    if (!currentMain || !siteData[currentMain] || !Array.isArray(siteData[currentMain].subItems) || siteData[currentMain].subItems.length === 0) {
+        if (titleEl) titleEl.innerText = "서브목차 없음";
+        if (display) display.innerHTML = `<div class="text-white text-sm">등록된 서브목차가 없습니다.</div>`;
+        return;
+    }
+
+    const currentSub = siteData[currentMain].subItems[currentSubIndex];
+    if (!currentSub) {
+        if (titleEl) titleEl.innerText = "선택 안됨";
+        if (display) display.innerHTML = `<div class="text-white text-sm">서브목차를 선택해 주세요.</div>`;
+        return;
+    }
+
+    if (titleEl) titleEl.innerText = currentSub.name;
+
+    const imageList = currentSub.images || [];
+
+    if (imageList.length === 0) {
+        if (isEditMode) {
+            display.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-slate-300 gap-3">
+                    <i class="fa-regular fa-image text-4xl"></i>
+                    <p class="text-xs">등록된 이미지가 없습니다.</p>
+                    <label class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer shadow">
+                        <i class="fa-solid fa-upload"></i> 이미지 등록하기
+                        <input type="file" accept="image/*" class="hidden" onchange="addImageToCurrentSub(event)">
+                    </label>
+                </div>
+            `;
+        } else {
+            display.innerHTML = `<div class="text-white text-sm">준비된 브리핑 이미지가 없습니다.</div>`;
+        }
+        return;
+    }
+
+    const currentImgSrc = imageList[0];
+    const editImgControls = isEditMode ? `
+        <div class="absolute bottom-4 right-4 bg-slate-900/90 text-white px-3 py-2 rounded-xl flex items-center gap-4 text-xs z-10 shadow-lg border border-slate-700">
+            <label class="hover:text-emerald-400 cursor-pointer flex items-center gap-1.5" title="이미지 변경">
+                <i class="fa-solid fa-pen"></i> 이미지 수정
+                <input type="file" accept="image/*" class="hidden" onchange="addImageToCurrentSub(event)">
+            </label>
+            <div class="h-4 w-[1px] bg-slate-600"></div>
+            <button onclick="deleteCurrentImage()" class="hover:text-rose-400 text-slate-300 flex items-center gap-1.5" title="이미지 삭제">
+                <i class="fa-solid fa-trash-can"></i> 삭제
+            </button>
+        </div>
+    ` : '';
+
+    display.innerHTML = `
+        <div class="relative w-full h-full flex items-center justify-center overflow-hidden rounded-xl md:rounded-2xl bg-slate-900 shadow-xl border border-slate-300 transform-gpu">
+            <img src="${currentImgSrc}" alt="${currentSub.name}" decoding="async" class="max-w-full max-h-full object-contain mx-auto shadow-md transition-transform duration-150 transform-gpu origin-center">
+            ${editImgControls}
+        </div>
+    `;
+}
+
 function resetImgTransform() {
     touchState = { scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0 };
     applyImgTransform();
@@ -643,258 +986,13 @@ function initImageTouchEvents() {
     });
 }
 
-function initNav() {
-    const primaryNavDesktop = document.getElementById('primaryNavDesktop');
-    const primaryNavMobile = document.getElementById('primaryNavMobile');
-    if (primaryNavDesktop) primaryNavDesktop.innerHTML = '';
-    if (primaryNavMobile) primaryNavMobile.innerHTML = '';
-
-    const keys = Object.keys(siteData);
-    
-    if (keys.length === 0) {
-        currentMain = null;
-        if (primaryNavDesktop && isEditMode) {
-            const addBtn = document.createElement('button');
-            addBtn.className = "no-drag w-full py-2 px-3 rounded-xl text-xs font-bold border-2 border-dashed border-emerald-400/50 hover:border-emerald-400 text-emerald-300 flex items-center justify-center gap-1 mt-2";
-            addBtn.onclick = addMainCategory;
-            addBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 메인목차 추가`;
-            primaryNavDesktop.appendChild(addBtn);
-        }
-        renderSecondaryNav();
-        return;
-    }
-
-    if (!currentMain || !siteData[currentMain]) {
-        currentMain = keys[0];
-    }
-
-    keys.forEach(key => {
-        const item = siteData[key];
-        const isActive = key === currentMain;
-
-        if (primaryNavDesktop) {
-            const btn = document.createElement('div');
-            btn.className = `main-nav-item w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between shadow-sm flex-shrink-0 border cursor-pointer ${isActive ? 'bg-[#1b4d24] text-white border-emerald-600' : 'bg-white text-slate-800 hover:bg-slate-100 border-transparent'}`;
-            btn.setAttribute('data-key', key);
-
-            btn.onclick = (e) => {
-                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
-                currentMain = key;
-                currentSubIndex = 0;
-                initNav();
-            };
-
-            const dragHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 hover:text-emerald-300 mr-2.5 py-1 px-1 text-sm cursor-grab active:cursor-grabbing" onclick="event.stopPropagation()"></i>` : '';
-            const delHtml = isEditMode ? `<button onclick="deleteMainCategory('${key}', event)" class="text-red-400 hover:text-red-200 p-1 rounded hover:bg-red-900/30"><i class="fa-solid fa-xmark"></i></button>` : '';
-
-            btn.innerHTML = `
-                ${dragHtml}
-                <div class="flex-1 truncate py-0.5">
-                    <span class="truncate">${item.title}</span>
-                </div>
-                ${delHtml}
-            `;
-            primaryNavDesktop.appendChild(btn);
-        }
-
-        if (primaryNavMobile) {
-            const btnM = document.createElement('div');
-            btnM.className = `main-nav-item py-1.5 px-3 rounded-lg text-[14px] font-bold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-2 shadow cursor-pointer ${isActive ? 'bg-[#1b4d24] text-white' : 'bg-white/10 text-slate-200'}`;
-            btnM.setAttribute('data-key', key);
-
-            btnM.onclick = (e) => {
-                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
-                currentMain = key;
-                currentSubIndex = 0;
-                initNav();
-            };
-
-            const dragMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-300 text-xs py-1 px-1" onclick="event.stopPropagation()"></i>` : '';
-            btnM.innerHTML = `
-                ${dragMobileHtml}
-                <span>${item.title}</span>
-            `;
-            primaryNavMobile.appendChild(btnM);
-        }
-    });
-
-    if (primaryNavDesktop && isEditMode) {
-        const addBtn = document.createElement('button');
-        addBtn.className = "no-drag w-full py-2 px-3 rounded-xl text-xs font-bold border-2 border-dashed border-emerald-400/50 hover:border-emerald-400 text-emerald-300 flex items-center justify-center gap-1 mt-2";
-        addBtn.onclick = addMainCategory;
-        addBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 메인목차 추가`;
-        primaryNavDesktop.appendChild(addBtn);
-    }
-
-    initSortableEvents();
-    renderSecondaryNav();
-}
-
-function renderSecondaryNav() {
-    const secondaryNavDesktop = document.getElementById('secondaryNavDesktop');
-    const secondaryNavMobile = document.getElementById('secondaryNavMobile');
-    const subTitle = document.getElementById('subCategoryTitle');
-
-    if (secondaryNavDesktop) {
-        secondaryNavDesktop.innerHTML = '';
-        if (currentMain) secondaryNavDesktop.setAttribute('data-main-key', currentMain);
-    }
-    if (secondaryNavMobile) {
-        secondaryNavMobile.innerHTML = '';
-        if (currentMain) secondaryNavMobile.setAttribute('data-main-key', currentMain);
-    }
-
-    if (!currentMain || !siteData[currentMain]) {
-        if (subTitle) subTitle.innerText = "세부목록";
-        renderContent();
-        return;
-    }
-
-    const currentObj = siteData[currentMain];
-    if (subTitle) subTitle.innerText = currentObj.title;
-
-    if (!Array.isArray(currentObj.subItems)) {
-        currentObj.subItems = [];
-    }
-
-    currentObj.subItems.forEach((sub, index) => {
-        const isActive = index === currentSubIndex;
-
-        if (secondaryNavDesktop) {
-            const btn = document.createElement('div');
-            btn.className = `sub-nav-item w-full py-2 px-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-between flex-shrink-0 border cursor-pointer ${isActive ? 'bg-[#0d1b3e] text-white font-bold border-slate-600 shadow-md' : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'}`;
-            btn.setAttribute('data-sub-id', sub.id);
-
-            btn.onclick = (e) => {
-                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
-                currentSubIndex = index;
-                renderSecondaryNav();
-            };
-
-            const dragSubHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 hover:text-slate-600 mr-2 py-1 px-1 cursor-grab active:cursor-grabbing text-xs" onclick="event.stopPropagation()"></i>` : '';
-            const delSubHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
-
-            btn.innerHTML = `
-                ${dragSubHtml}
-                <div class="flex-1 truncate py-0.5">
-                    <span class="truncate">${sub.name}</span>
-                </div>
-                ${delSubHtml}
-            `;
-            secondaryNavDesktop.appendChild(btn);
-        }
-
-        if (secondaryNavMobile) {
-            const btnM = document.createElement('div');
-            btnM.className = `sub-nav-item py-1 px-2.5 rounded-md text-[12px] font-semibold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-1.5 cursor-pointer ${isActive ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-700 border border-slate-300'}`;
-            btnM.setAttribute('data-sub-id', sub.id);
-
-            btnM.onclick = (e) => {
-                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
-                currentSubIndex = index;
-                renderSecondaryNav();
-            };
-
-            const dragSubMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 text-[10px] py-1 px-0.5" onclick="event.stopPropagation()"></i>` : '';
-            const delSubMobileHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-red-500 ml-1 p-0.5"><i class="fa-solid fa-xmark text-[11px]"></i></button>` : '';
-
-            btnM.innerHTML = `
-                ${dragSubMobileHtml}
-                <span>${sub.name}</span>
-                ${delSubMobileHtml}
-            `;
-            secondaryNavMobile.appendChild(btnM);
-        }
-    });
-
-    if (secondaryNavDesktop && isEditMode) {
-        const addSubBtn = document.createElement('button');
-        addSubBtn.className = "no-drag w-full py-2 px-2.5 rounded-lg text-xs font-bold border-2 border-dashed border-slate-400 hover:border-slate-600 text-slate-600 flex items-center justify-center gap-1 mt-2";
-        addSubBtn.onclick = addSubCategory;
-        addSubBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 서브목차 추가`;
-        secondaryNavDesktop.appendChild(addSubBtn);
-    }
-
-    if (secondaryNavMobile && isEditMode) {
-        const addSubBtnMobile = document.createElement('button');
-        addSubBtnMobile.className = "no-drag py-1 px-2.5 rounded-md text-[12px] font-bold bg-emerald-600 text-white flex-shrink-0 flex items-center gap-1 shadow active:scale-95";
-        addSubBtnMobile.onclick = addSubCategory;
-        addSubBtnMobile.innerHTML = `<i class="fa-solid fa-plus text-[10px]"></i> 추가`;
-        secondaryNavMobile.appendChild(addSubBtnMobile);
-    }
-
-    initSubSortableEvents();
-    renderContent();
-}
-
-function renderContent() {
-    resetImgTransform();
-    const display = document.getElementById('contentDisplayArea');
-    if (!display) return;
-
-    if (!currentMain || !siteData[currentMain] || !Array.isArray(siteData[currentMain].subItems) || siteData[currentMain].subItems.length === 0) {
-        display.innerHTML = `<div class="text-white text-sm">항목이 없습니다.</div>`;
-        return;
-    }
-
-    const currentSub = siteData[currentMain].subItems[currentSubIndex];
-    if (!currentSub) {
-        display.innerHTML = `<div class="text-white text-sm">항목을 선택해 주세요.</div>`;
-        return;
-    }
-
-    document.getElementById('currentCategoryBadge').innerText = siteData[currentMain].title;
-    document.getElementById('currentContentTitle').innerText = currentSub.name;
-
-    const imageList = currentSub.images || [];
-
-    if (imageList.length === 0) {
-        if (isEditMode) {
-            display.innerHTML = `
-                <div class="flex flex-col items-center justify-center h-full text-slate-300 gap-3">
-                    <i class="fa-regular fa-image text-4xl"></i>
-                    <p class="text-xs">등록된 이미지가 없습니다.</p>
-                    <label class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer shadow">
-                        <i class="fa-solid fa-upload"></i> 이미지 등록하기
-                        <input type="file" accept="image/*" class="hidden" onchange="addImageToCurrentSub(event)">
-                    </label>
-                </div>
-            `;
-        } else {
-            display.innerHTML = `<div class="text-white text-sm">준비된 브리핑 이미지가 없습니다.</div>`;
-        }
-        return;
-    }
-
-    const currentImgSrc = imageList[0];
-    const editImgControls = isEditMode ? `
-        <div class="absolute bottom-4 right-4 bg-slate-900/90 text-white px-3 py-2 rounded-xl flex items-center gap-4 text-xs z-10 shadow-lg border border-slate-700">
-            <label class="hover:text-emerald-400 cursor-pointer flex items-center gap-1.5" title="이미지 변경">
-                <i class="fa-solid fa-pen"></i> 이미지 수정
-                <input type="file" accept="image/*" class="hidden" onchange="addImageToCurrentSub(event)">
-            </label>
-            <div class="h-4 w-[1px] bg-slate-600"></div>
-            <button onclick="deleteCurrentImage()" class="hover:text-red-400 text-slate-300 flex items-center gap-1.5" title="이미지 삭제">
-                <i class="fa-solid fa-trash-can"></i> 삭제
-            </button>
-        </div>
-    ` : '';
-
-    display.innerHTML = `
-        <div class="relative w-full h-full flex items-center justify-center overflow-hidden rounded-xl md:rounded-2xl bg-slate-900 shadow-xl border border-slate-300 transform-gpu">
-            <img src="${currentImgSrc}" alt="${currentSub.name}" decoding="async" class="max-w-full max-h-full object-contain mx-auto shadow-md transition-transform duration-150 transform-gpu origin-center">
-            ${editImgControls}
-        </div>
-    `;
-}
-
 function openZoomModal() {
     const modal = document.getElementById('imageZoomModal');
     const zoomedImg = document.getElementById('zoomedImage');
     if (!currentMain || !siteData[currentMain]) return;
     const currentSub = siteData[currentMain].subItems[currentSubIndex];
     
-    if (modal && zoomedImg && currentSub && currentSub.images.length > 0) {
+    if (modal && zoomedImg && currentSub && currentSub.images && currentSub.images.length > 0) {
         zoomedImg.src = currentSub.images[0];
         modal.classList.remove('hidden');
     }
