@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initImageTouchEvents();
     preloadAllImagesWithProgress();
 
-    // Supabase 로그인 상태 검사
     if (window.supabaseClient) {
         const { data: { session } } = await window.supabaseClient.auth.getSession();
         if (session) {
@@ -47,9 +46,38 @@ function showAuthModal() {
 }
 
 function showLobbyModal() {
+    // 로비 진입 시 모든 상태값 완벽 초기화
+    currentSiteId = null;
+    siteData = {};
+    isEditMode = false;
+    currentMain = null;
+    currentSubIndex = 0;
+    resetEditUI();
+
     document.getElementById('authModal')?.classList.add('hidden');
     document.getElementById('siteLobbyModal')?.classList.remove('hidden');
     loadUserSites();
+}
+
+// 편집 버튼 UI 초기화 전용 함수
+function resetEditUI() {
+    const btnDesktop = document.getElementById('editToggleBtnDesktop');
+    const textDesktop = document.getElementById('editToggleTextDesktop');
+    const btnMobile = document.getElementById('editToggleBtnMobile');
+    const textMobile = document.getElementById('editToggleTextMobile');
+    const statusBadge = document.getElementById('modeStatusBadge');
+
+    if (btnDesktop) {
+        btnDesktop.className = "bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition-all active:scale-95";
+        if (textDesktop) textDesktop.innerText = "편집하기";
+    }
+    if (btnMobile) {
+        btnMobile.className = "bg-amber-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow";
+        if (textMobile) textMobile.innerText = "편집하기";
+    }
+    if (statusBadge) {
+        statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>상담 전용 모드</span>`;
+    }
 }
 
 async function logout() {
@@ -72,8 +100,6 @@ function initAuthEvents() {
             e.preventDefault();
             const userId = document.getElementById('authUserId').value.trim();
             const password = document.getElementById('authPassword').value;
-
-            // 아이디를 Supabase 내부 이메일 형식으로 자동 변환
             const email = `${userId}@vip.com`;
 
             const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
@@ -92,7 +118,6 @@ function initAuthEvents() {
             e.preventDefault();
             const userId = document.getElementById('signupUserId').value.trim();
             const password = document.getElementById('signupPassword').value;
-
             const email = `${userId}@vip.com`;
 
             const { data, error } = await window.supabaseClient.auth.signUp({ email, password });
@@ -239,17 +264,24 @@ function cancelEditSiteName(event) {
     renderSiteList();
 }
 
+// [개선 3 해결] 완전히 독립된 깨끗한 데이터 베이스로 새 현장 생성
 async function createNewSite() {
     const siteName = prompt("새 분양 현장 이름을 입력하세요:");
     if (!siteName || !siteName.trim()) return;
 
-    const defaultData = {
-        summary: { title: "사업안내", subItems: [{ name: "사업개요", images: [] }] }
+    // 매번 새로운 독립 객체 생성 (깊은 구조)
+    const freshData = {
+        "cat_1": {
+            title: "사업안내",
+            subItems: [
+                { name: "사업개요", images: [] }
+            ]
+        }
     };
 
     const { error } = await window.supabaseClient
         .from('sites')
-        .insert([{ user_id: currentUser.id, name: siteName.trim(), data: defaultData }]);
+        .insert([{ user_id: currentUser.id, name: siteName.trim(), data: freshData }]);
 
     if (error) {
         alert("현장 추가 실패: " + error.message);
@@ -271,13 +303,19 @@ async function deleteSite(siteId, event) {
     }
 }
 
+// [개선 1, 2 해결] 현장 선택 시 독립적인 깊은 복사(JSON parse/stringify) 및 상태 초기화
 function selectSite(siteId) {
     currentSiteId = siteId;
     const site = userSites.find(s => s.id === siteId);
     if (!site) return;
 
-    siteData = site.data || {};
-    currentMain = Object.keys(siteData)[0] || null;
+    // 깊은 복사를 통해 데이터 참조 꼬임 완벽 방지
+    siteData = JSON.parse(JSON.stringify(site.data || {}));
+    isEditMode = false; // 편집모드 초기화
+    resetEditUI();
+
+    const keys = Object.keys(siteData);
+    currentMain = keys.length > 0 ? keys[0] : null;
     currentSubIndex = 0;
 
     const splashTitle = document.getElementById('splashSiteTitle');
@@ -320,19 +358,7 @@ function toggleEditMode() {
             statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span><span class="text-amber-700 font-bold">편집 모드</span>`;
         }
     } else {
-        if (btnDesktop) {
-            btnDesktop.className = "bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow active:scale-95";
-            if (textDesktop) textDesktop.innerText = "편집하기";
-        }
-        if (btnMobile) {
-            btnMobile.className = "bg-amber-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow";
-            if (textMobile) textMobile.innerText = "편집하기";
-        }
-        if (statusBadge) {
-            statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>상담 전용 모드</span>`;
-        }
-        
-        // 편집 종료 시 클라우드 서버로 자동 저장
+        resetEditUI();
         saveCurrentSiteData();
     }
     initNav();
@@ -456,6 +482,11 @@ function addSubCategory() {
     if (!currentMain || !siteData[currentMain]) return;
     const subName = prompt("새 서브 목차 이름을 입력하세요:");
     if (!subName || !subName.trim()) return;
+    
+    if (!siteData[currentMain].subItems) {
+        siteData[currentMain].subItems = [];
+    }
+
     siteData[currentMain].subItems.push({ name: subName.trim(), images: [] });
     currentSubIndex = siteData[currentMain].subItems.length - 1;
     saveCurrentSiteData();
