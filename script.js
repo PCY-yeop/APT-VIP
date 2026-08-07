@@ -82,7 +82,7 @@ function showToast(message, isError = false) {
 // ----------------------------------------------------
 // [고성능 이미지 자동 압축 및 Storage 업로드 엔진]
 // ----------------------------------------------------
-function compressImage(file, maxWidth = 1200, quality = 0.75) {
+function compressImage(file, maxWidth = 1200, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -114,12 +114,11 @@ function compressImage(file, maxWidth = 1200, quality = 0.75) {
     });
 }
 
-// Supabase Storage 버킷 저장 또는 초경량 압축 Base64 스마트 변환
 async function uploadToStorageOrCompress(file) {
     try {
-        const compressedBase64 = await compressImage(file, 1200, 0.75);
+        const compressedBase64 = await compressImage(file, 1200, 0.7);
         
-        // Supabase Storage 업로드 시도 (스토리지 버킷 'briefing-images' 활성화 시 사용)
+        // Supabase Storage 업로드 시도 (버킷 'briefing-images' 사용)
         if (window.supabaseClient && window.supabaseClient.storage) {
             try {
                 const response = await fetch(compressedBase64);
@@ -142,7 +141,7 @@ async function uploadToStorageOrCompress(file) {
                     }
                 }
             } catch (storageErr) {
-                console.warn("Storage upload fallback to compressed base64");
+                console.warn("Storage upload fallback to compressed base64:", storageErr);
             }
         }
         
@@ -386,7 +385,7 @@ function renderSiteList() {
         `;
 
         return `
-            <div onclick="${isEditing ? '' : `selectSite('${site.id}')`}" class="bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/60 rounded-2xl p-5 cursor-pointer transition-all flex flex-col justify-between group shadow-xl hover:shadow-2xl ${isEditing ? 'ring-2 ring-emerald-500/50' : 'hover:-translate-y-1'} duration-200">
+            <div id="siteCard_${site.id}" onclick="${isEditing ? '' : `selectSite('${site.id}')`}" class="relative bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/60 rounded-2xl p-5 cursor-pointer transition-all flex flex-col justify-between group shadow-xl hover:shadow-2xl ${isEditing ? 'ring-2 ring-emerald-500/50' : 'hover:-translate-y-1'} duration-200">
                 <div>
                     <div class="flex justify-between items-center mb-4">
                         <span class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/50 px-2.5 py-1 rounded-md">분양 현장</span>
@@ -517,31 +516,54 @@ async function deleteSite(siteId, event) {
 
 async function selectSite(siteId) {
     currentSiteId = siteId;
-    
-    if (window.supabaseClient) {
-        showToast("현장 브리핑 데이터 불러오는 중...");
-        const { data, error } = await window.supabaseClient.from('sites').select('*').eq('id', siteId).single();
-        if (!error && data) {
-            siteData = normalizeSiteData(data.data || {});
-            const splashTitle = document.getElementById('splashSiteTitle');
-            if (splashTitle) splashTitle.innerText = data.name;
-        } else {
-            siteData = normalizeSiteData({});
-        }
-    } else {
-        siteData = normalizeSiteData({});
+
+    // [0.01초 터치 반응] 카드 터치 즉시 로딩 오버레이 표시
+    const cardEl = document.getElementById(`siteCard_${siteId}`);
+    if (cardEl) {
+        cardEl.classList.add('opacity-80', 'pointer-events-none');
+        cardEl.insertAdjacentHTML('beforeend', `<div id="cardLoader_${siteId}" class="absolute inset-0 bg-slate-950/85 rounded-2xl flex items-center justify-center gap-2 text-emerald-400 text-xs font-bold z-20 backdrop-blur-sm"><i class="fa-solid fa-circle-notch fa-spin text-lg"></i> 브리핑북 불러오는 중...</div>`);
     }
 
-    isEditMode = false;
-    resetEditUI();
-    updateLogoDisplay();
+    try {
+        let site = userSites.find(s => s.id === siteId);
 
-    const keys = Object.keys(siteData).filter(k => k !== '_logoUrl');
-    currentMain = keys.length > 0 ? keys[0] : null;
-    currentSubIndex = 0;
+        // 해당 현장의 브리핑 데이터만 싱글 쿼리로 초고속 불러오기
+        if (window.supabaseClient) {
+            const { data, error } = await window.supabaseClient
+                .from('sites')
+                .select('id, name, data')
+                .eq('id', siteId)
+                .single();
 
-    document.getElementById('siteLobbyModal')?.classList.add('hidden');
-    initNav();
+            if (!error && data) {
+                site = data;
+            }
+        }
+
+        siteData = normalizeSiteData(site ? site.data : {});
+        isEditMode = false;
+        resetEditUI();
+        updateLogoDisplay();
+
+        const keys = Object.keys(siteData).filter(k => k !== '_logoUrl');
+        currentMain = keys.length > 0 ? keys[0] : null;
+        currentSubIndex = 0;
+
+        const splashTitle = document.getElementById('splashSiteTitle');
+        if (splashTitle) splashTitle.innerText = site ? site.name : '';
+
+        document.getElementById('siteLobbyModal')?.classList.add('hidden');
+        initNav();
+    } catch(err) {
+        console.error("현장 데이터 로드 오류:", err);
+        showToast("현장 데이터를 불러오는 중 오류가 발생했습니다.", true);
+    } finally {
+        if (cardEl) {
+            cardEl.classList.remove('opacity-80', 'pointer-events-none');
+            const loader = document.getElementById(`cardLoader_${siteId}`);
+            if (loader) loader.remove();
+        }
+    }
 }
 
 async function saveCurrentSiteData() {
