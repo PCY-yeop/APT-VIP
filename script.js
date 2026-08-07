@@ -385,6 +385,9 @@ function selectSite(siteId) {
 async function saveCurrentSiteData() {
     if (!currentSiteId || !currentUser || !window.supabaseClient) return;
     try {
+        const site = userSites.find(s => s.id === currentSiteId);
+        if (site) site.data = siteData;
+
         await window.supabaseClient
             .from('sites')
             .update({ data: siteData })
@@ -483,8 +486,14 @@ function updateSubOrderFromDOM(container) {
 }
 
 function initSortableEvents() {
-    if (sortablePrimaryDesktop) sortablePrimaryDesktop.destroy();
-    if (sortablePrimaryMobile) sortablePrimaryMobile.destroy();
+    if (sortablePrimaryDesktop) {
+        try { sortablePrimaryDesktop.destroy(); } catch(e) {}
+        sortablePrimaryDesktop = null;
+    }
+    if (sortablePrimaryMobile) {
+        try { sortablePrimaryMobile.destroy(); } catch(e) {}
+        sortablePrimaryMobile = null;
+    }
 
     const options = {
         handle: '.drag-handle',
@@ -495,18 +504,30 @@ function initSortableEvents() {
 
     const navDesktop = document.getElementById('primaryNavDesktop');
     if (navDesktop && isEditMode) {
-        sortablePrimaryDesktop = new Sortable(navDesktop, { ...options, onEnd: () => updateMainOrderFromDOM(navDesktop) });
+        sortablePrimaryDesktop = new Sortable(navDesktop, { 
+            ...options, 
+            onEnd: () => setTimeout(() => updateMainOrderFromDOM(navDesktop), 10) 
+        });
     }
 
     const navMobile = document.getElementById('primaryNavMobile');
     if (navMobile && isEditMode) {
-        sortablePrimaryMobile = new Sortable(navMobile, { ...options, onEnd: () => updateMainOrderFromDOM(navMobile) });
+        sortablePrimaryMobile = new Sortable(navMobile, { 
+            ...options, 
+            onEnd: () => setTimeout(() => updateMainOrderFromDOM(navMobile), 10) 
+        });
     }
 }
 
 function initSubSortableEvents() {
-    if (sortableSecondaryDesktop) sortableSecondaryDesktop.destroy();
-    if (sortableSecondaryMobile) sortableSecondaryMobile.destroy();
+    if (sortableSecondaryDesktop) {
+        try { sortableSecondaryDesktop.destroy(); } catch(e) {}
+        sortableSecondaryDesktop = null;
+    }
+    if (sortableSecondaryMobile) {
+        try { sortableSecondaryMobile.destroy(); } catch(e) {}
+        sortableSecondaryMobile = null;
+    }
 
     const options = {
         handle: '.drag-handle',
@@ -517,12 +538,18 @@ function initSubSortableEvents() {
 
     const subDesktop = document.getElementById('secondaryNavDesktop');
     if (subDesktop && isEditMode) {
-        sortableSecondaryDesktop = new Sortable(subDesktop, { ...options, onEnd: () => updateSubOrderFromDOM(subDesktop) });
+        sortableSecondaryDesktop = new Sortable(subDesktop, { 
+            ...options, 
+            onEnd: () => setTimeout(() => updateSubOrderFromDOM(subDesktop), 10) 
+        });
     }
 
     const subMobile = document.getElementById('secondaryNavMobile');
     if (subMobile && isEditMode) {
-        sortableSecondaryMobile = new Sortable(subMobile, { ...options, onEnd: () => updateSubOrderFromDOM(subMobile) });
+        sortableSecondaryMobile = new Sortable(subMobile, { 
+            ...options, 
+            onEnd: () => setTimeout(() => updateSubOrderFromDOM(subMobile), 10) 
+        });
     }
 }
 
@@ -550,22 +577,19 @@ function deleteMainCategory(key, event) {
     if (event) event.stopPropagation();
     
     const catName = siteData[key] ? siteData[key].title : '메인목차';
-    if (typeof openConfirmModal === 'function') {
-        openConfirmModal("메인목차 삭제", `'${catName}' 카테고리를 삭제하시겠습니까?`, () => {
-            delete siteData[key];
-            const keys = Object.keys(siteData);
-            currentMain = keys.length > 0 ? keys[0] : null;
-            currentSubIndex = 0;
-            saveCurrentSiteData();
-            initNav();
-        });
-    } else {
+    const executeDelete = () => {
         delete siteData[key];
         const keys = Object.keys(siteData);
         currentMain = keys.length > 0 ? keys[0] : null;
         currentSubIndex = 0;
         saveCurrentSiteData();
         initNav();
+    };
+
+    if (typeof openConfirmModal === 'function') {
+        openConfirmModal("메인목차 삭제", `'${catName}' 카테고리를 삭제하시겠습니까?`, executeDelete);
+    } else {
+        executeDelete();
     }
 }
 
@@ -593,22 +617,19 @@ function addSubCategory() {
 function deleteSubCategory(index, event) {
     if (event) event.stopPropagation();
     
-    if (typeof openConfirmModal === 'function') {
-        openConfirmModal("서브목차 삭제", "서브 목차를 삭제하시겠습니까?", () => {
-            if (siteData[currentMain] && Array.isArray(siteData[currentMain].subItems)) {
-                siteData[currentMain].subItems.splice(index, 1);
-                currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
-                saveCurrentSiteData();
-                renderSecondaryNav();
-            }
-        });
-    } else {
+    const executeSubDelete = () => {
         if (siteData[currentMain] && Array.isArray(siteData[currentMain].subItems)) {
             siteData[currentMain].subItems.splice(index, 1);
             currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
             saveCurrentSiteData();
             renderSecondaryNav();
         }
+    };
+
+    if (typeof openConfirmModal === 'function') {
+        openConfirmModal("서브목차 삭제", "서브 목차를 삭제하시겠습니까?", executeSubDelete);
+    } else {
+        executeSubDelete();
     }
 }
 
@@ -630,16 +651,16 @@ function addImageToCurrentSub(event) {
 function deleteCurrentImage() {
     if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
     
-    if (typeof openConfirmModal === 'function') {
-        openConfirmModal("이미지 삭제", "현재 이미지를 삭제하시겠습니까?", () => {
-            siteData[currentMain].subItems[currentSubIndex].images = [];
-            saveCurrentSiteData();
-            renderContent();
-        });
-    } else {
+    const executeImgDelete = () => {
         siteData[currentMain].subItems[currentSubIndex].images = [];
         saveCurrentSiteData();
         renderContent();
+    };
+
+    if (typeof openConfirmModal === 'function') {
+        openConfirmModal("이미지 삭제", "현재 이미지를 삭제하시겠습니까?", executeImgDelete);
+    } else {
+        executeImgDelete();
     }
 }
 
@@ -692,16 +713,13 @@ function initNav() {
                 ${delHtml}
             `;
 
-            // 클릭 이벤트 독립 핸들링 (Sortable 가로채기 방지)
             const handleMainClick = (e) => {
                 if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
                 e.preventDefault();
                 e.stopPropagation();
-                if (currentMain !== key) {
-                    currentMain = key;
-                    currentSubIndex = 0;
-                    initNav();
-                }
+                currentMain = key;
+                currentSubIndex = 0;
+                initNav();
             };
 
             btn.addEventListener('click', handleMainClick);
@@ -724,14 +742,11 @@ function initNav() {
                 if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
                 e.preventDefault();
                 e.stopPropagation();
-                if (currentMain !== key) {
-                    currentMain = key;
-                    currentSubIndex = 0;
-                    initNav();
-                }
+                currentMain = key;
+                currentSubIndex = 0;
+                initNav();
             };
 
-            // touchend와 click 이중 호출로 인한 이중전환(Phantom Click) 버그 제거
             btnM.addEventListener('click', handleMainMobileClick);
             primaryNavMobile.appendChild(btnM);
         }
@@ -763,7 +778,6 @@ function renderSecondaryNav() {
         if (currentMain) secondaryNavMobile.setAttribute('data-main-key', currentMain);
     }
 
-    // currentMain이 유효하지 않은 경우 안전 예외 처리
     if (!currentMain || !siteData[currentMain]) {
         if (subTitle) subTitle.innerText = "세부목록";
         renderContent();
@@ -777,7 +791,6 @@ function renderSecondaryNav() {
         currentObj.subItems = [];
     }
 
-    // 선택된 currentMain의 서브목차만 1:1 강제 매핑 렌더링
     currentObj.subItems.forEach((sub, index) => {
         const isActive = index === currentSubIndex;
 
@@ -831,7 +844,6 @@ function renderSecondaryNav() {
                 renderSecondaryNav();
             };
 
-            // 모바일 터치 이중 이벤트 제어
             btnM.addEventListener('click', handleSubMobileClick);
             secondaryNavMobile.appendChild(btnM);
         }
@@ -866,7 +878,6 @@ function renderContent() {
     const badgeEl = document.getElementById('currentCategoryBadge');
     const titleEl = document.getElementById('currentContentTitle');
 
-    // 카테고리 뱃지 및 메인 제목 동기화
     if (badgeEl) {
         badgeEl.innerText = (currentMain && siteData[currentMain]) ? siteData[currentMain].title : "사업안내";
     }
