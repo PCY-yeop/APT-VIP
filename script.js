@@ -1,5 +1,5 @@
 // ====================================================
-// VIP 브리핑북 메인 스크립트 (초고속 이미지 압축 & 클라우드 동기화 최적화)
+// VIP 브리핑북 메인 스크립트 (통합 안정화 및 로그인/스토리지 완벽 최적화)
 // ====================================================
 
 // ----------------------------------------------------
@@ -75,6 +75,410 @@ function getMainKeys() {
 // ----------------------------------------------------
 // [커스텀 알림/모달 유틸리티 (alert/confirm 대체)]
 // ----------------------------------------------------
+function showToast(message, isError = false) {
+    let container = document.getElementById('customToastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'customToastContainer';
+        container.className = 'fixed top-5 right-5 z-[150] flex flex-col gap-2 pointer-events-none';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-3 rounded-xl text-xs font-bold text-white shadow-2xl flex items-center gap-2 pointer-events-auto transition-all transform translate-y-[-10px] opacity-0 ${isError ? 'bg-rose-600 border border-rose-400/30' : 'bg-emerald-600 border border-emerald-400/30'}`;
+    toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> <span>${message}</span>`;
+    
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+    }, 10);
+
+    setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// 고성능 이미지 자동 압축
+function compressImage(file, maxWidth = 1200, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(compressedDataUrl);
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+}
+
+// Supabase Storage 버킷 저장 또는 초경량 압축 Base64 변환
+async function uploadToStorageOrCompress(file) {
+    try {
+        const compressedBase64 = await compressImage(file, 1200, 0.75);
+        
+        if (window.supabaseClient && window.supabaseClient.storage) {
+            try {
+                const response = await fetch(compressedBase64);
+                const blob = await response.blob();
+                const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
+
+                const { data, error } = await window.supabaseClient
+                    .storage
+                    .from('briefing-images')
+                    .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+
+                if (!error && data) {
+                    const { data: publicUrlData } = window.supabaseClient
+                        .storage
+                        .from('briefing-images')
+                        .getPublicUrl(fileName);
+
+                    if (publicUrlData && publicUrlData.publicUrl) {
+                        return publicUrlData.publicUrl;
+                    }
+                }
+            } catch (storageErr) {
+                console.warn("Storage upload fallback to compressed base64");
+            }
+        }
+        
+        return compressedBase64;
+    } catch (e) {
+        console.error("Image processing error:", e);
+        throw e;
+    }
+}
+
+function forceHideLoadingScreen() {
+    if (isSplashFinished) return;
+    isSplashFinished = true;
+    const loadingScreen = document.getElementById('loadingScreen');
+    if (loadingScreen) {
+        loadingScreen.classList.add('opacity-0');
+        setTimeout(() => {
+            loadingScreen.style.display = 'none';
+        }, 400);
+    }
+}
+
+// ----------------------------------------------------
+// [1. 초기 실행 및 Supabase 인증 세션 검사]
+// ----------------------------------------------------
+document.addEventListener('DOMContentLoaded', async () => {
+    initAuthEvents();
+    initImageTouchEvents();
+    preloadAllImagesWithProgress();
+
+    setTimeout(() => {
+        forceHideLoadingScreen();
+    }, 2200);
+
+    if (window.supabaseClient) {
+        try {
+            const { data: { session } } = await window.supabaseClient.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                showLobbyModal();
+            } else {
+                showAuthModal();
+            }
+        } catch(err) {
+            showAuthModal();
+        }
+    } else {
+        showAuthModal();
+    }
+});
+
+function showAuthModal() {
+    forceHideLoadingScreen();
+    document.getElementById('authModal')?.classList.remove('hidden');
+    document.getElementById('siteLobbyModal')?.classList.add('hidden');
+}
+
+function showLobbyModal() {
+    forceHideLoadingScreen();
+    currentSiteId = null;
+    siteData = {};
+    isEditMode = false;
+    currentMain = null;
+    currentSubIndex = 0;
+    resetEditUI();
+    updateLogoDisplay();
+
+    document.getElementById('authModal')?.classList.add('hidden');
+    document.getElementById('siteLobbyModal')?.classList.remove('hidden');
+    loadUserSites();
+}
+
+function resetEditUI() {
+    const btnDesktop = document.getElementById('editToggleBtnDesktop');
+    const textDesktop = document.getElementById('editToggleTextDesktop');
+    const btnMobile = document.getElementById('editToggleBtnMobile');
+    const textMobile = document.getElementById('editToggleTextMobile');
+    const statusBadge = document.getElementById('modeStatusBadge');
+
+    const mobileLogoBtn = document.getElementById('mobileLogoEditBtn');
+    const desktopLogoBtn = document.getElementById('desktopLogoEditBtn');
+
+    if (btnDesktop) {
+        btnDesktop.className = "bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition-all active:scale-95";
+        if (textDesktop) textDesktop.innerText = "편집하기";
+    }
+    if (btnMobile) {
+        btnMobile.className = "bg-amber-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow";
+        if (textMobile) textMobile.innerText = "편집하기";
+    }
+    if (statusBadge) {
+        statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>상담 전용 모드</span>`;
+    }
+
+    if (mobileLogoBtn) mobileLogoBtn.classList.add('hidden');
+    if (desktopLogoBtn) desktopLogoBtn.classList.add('hidden');
+}
+
+async function logout() {
+    if (window.supabaseClient) {
+        await window.supabaseClient.auth.signOut();
+    }
+    currentUser = null;
+    showAuthModal();
+}
+
+// ----------------------------------------------------
+// [2. Supabase 회원가입 및 로그인 처리]
+// ----------------------------------------------------
+function initAuthEvents() {
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('authUserId').value.trim();
+            const password = document.getElementById('authPassword').value;
+            const email = `${userId}@vip.com`;
+
+            if (!window.supabaseClient) {
+                currentUser = { id: userId, email: email };
+                showLobbyModal();
+                return;
+            }
+
+            const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+            
+            if (error) {
+                showToast("로그인 실패: 아이디 또는 비밀번호를 확인해 주세요.", true);
+            } else {
+                currentUser = data.user;
+                showLobbyModal();
+            }
+        });
+    }
+
+    if (signupForm) {
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('signupUserId').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            const email = `${userId}@vip.com`;
+
+            if (!window.supabaseClient) {
+                showToast(`'${userId}' 간편 가입 완료! 로그인해 주세요.`);
+                if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
+                return;
+            }
+
+            const { data, error } = await window.supabaseClient.auth.signUp({ email, password });
+
+            if (error) {
+                showToast("회원가입 실패: " + error.message, true);
+            } else {
+                showToast(`'${userId}' 계정이 생성되었습니다! 로그인해 주세요.`);
+                if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
+                const authInput = document.getElementById('authUserId');
+                if (authInput) authInput.value = userId;
+            }
+        });
+    }
+}
+
+// ----------------------------------------------------
+// [3. Supabase 서버에서 현장 목록 읽기 / 추가 / 수정 / 삭제]
+// ----------------------------------------------------
+async function loadUserSites() {
+    const container = document.getElementById('siteListContainer');
+    if (!container) return;
+
+    container.innerHTML = `<div class="col-span-full text-center text-slate-400 py-16"><i class="fa-solid fa-spinner fa-spin mr-2 text-emerald-400 text-lg"></i><p class="text-xs mt-2">분양 현장 목록을 불러오는 중...</p></div>`;
+
+    if (!window.supabaseClient) {
+        userSites = [];
+        renderSiteList();
+        return;
+    }
+
+    try {
+        let { data, error } = await window.supabaseClient
+            .from('sites')
+            .select('id, name, created_at')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.warn("created_at 정렬 조회 실패, 기본 조회 시도:", error);
+            const fallback = await window.supabaseClient.from('sites').select('id, name');
+            data = fallback.data;
+            error = fallback.error;
+        }
+
+        if (error) {
+            console.error("데이터 로드 오류:", error);
+            container.innerHTML = `<div class="col-span-full text-center text-rose-400 py-16">데이터를 불러오지 못했습니다. DB 연결 및 RLS 권한을 확인해 주세요.</div>`;
+            return;
+        }
+
+        userSites = data || [];
+        renderSiteList();
+    } catch(err) {
+        console.error("Supabase 통신 오류:", err);
+        container.innerHTML = `<div class="col-span-full text-center text-rose-400 py-16">서버와 연결할 수 없습니다.</div>`;
+    }
+}
+
+function renderSiteList() {
+    const container = document.getElementById('siteListContainer');
+    if (!container) return;
+
+    if (userSites.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-full text-center text-slate-400 py-16 bg-slate-900/60 rounded-3xl border border-slate-800/80">
+                <i class="fa-solid fa-folder-open text-4xl text-slate-600 mb-3"></i>
+                <p class="text-sm font-semibold text-slate-300">등록된 분양 현장이 없습니다.</p>
+                <p class="text-xs text-slate-500 mt-1">상단 [+ 새 현장 등록] 버튼을 눌러 첫 현장을 만드세요.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = userSites.map(site => {
+        const isEditing = editingSiteId === site.id;
+
+        const nameTitleHtml = isEditing ? `
+            <div class="flex items-center gap-2 mb-2" onclick="event.stopPropagation()">
+                <input type="text" id="editInput_${site.id}" value="${site.name}" 
+                    class="bg-slate-800 border border-emerald-500 rounded-lg px-2.5 py-1 text-sm font-bold text-white w-full focus:outline-none"
+                    onkeydown="if(event.key==='Enter') saveSiteName('${site.id}', event)">
+                <button onclick="saveSiteName('${site.id}', event)" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded-lg font-bold flex-shrink-0">
+                    저장
+                </button>
+                <button onclick="cancelEditSiteName(event)" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-2 py-1 rounded-lg flex-shrink-0">
+                    취소
+                </button>
+            </div>
+        ` : `
+            <h3 class="font-bold text-base text-white group-hover:text-emerald-400 transition-colors line-clamp-1 mb-1">${site.name}</h3>
+        `;
+
+        return `
+            <div id="siteCard_${site.id}" onclick="${isEditing ? '' : `selectSite('${site.id}')`}" class="relative bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/60 rounded-2xl p-5 cursor-pointer transition-all flex flex-col justify-between group shadow-xl hover:shadow-2xl ${isEditing ? 'ring-2 ring-emerald-500/50' : 'hover:-translate-y-1'} duration-200">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/50 px-2.5 py-1 rounded-md">분양 현장</span>
+                        <div class="flex items-center gap-1">
+                            <button onclick="startEditSiteName('${site.id}', event)" class="text-slate-400 hover:text-emerald-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors" title="이름 수정">
+                                <i class="fa-solid fa-pen-to-square text-xs"></i>
+                            </button>
+                            <button onclick="deleteSite('${site.id}', event)" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors" title="현장 삭제">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                    ${nameTitleHtml}
+                    <p class="text-xs text-slate-400">브리핑북 목차 및 이미지 관리</p>
+                </div>
+                
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-300 pt-4 mt-6 border-t border-slate-800/80 group-hover:text-white">
+                    <span>브리핑북 열기</span>
+                    <div class="w-7 h-7 rounded-full bg-slate-800 group-hover:bg-emerald-600 flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-arrow-right text-xs text-slate-300 group-hover:text-white"></i>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function startEditSiteName(siteId, event) {
+    if (event) event.stopPropagation();
+    editingSiteId = siteId;
+    renderSiteList();
+    
+    setTimeout(() => {
+        const input = document.getElementById(`editInput_${siteId}`);
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 50);
+}
+
+async function saveSiteName(siteId, event) {
+    if (event) event.stopPropagation();
+    const input = document.getElementById(`editInput_${siteId}`);
+    if (!input) return;
+
+    const newName = input.value.trim();
+    if (!newName) {
+        showToast("현장 이름을 입력해 주세요.", true);
+        return;
+    }
+
+    if (window.supabaseClient) {
+        const { error } = await window.supabaseClient
+            .from('sites')
+            .update({ name: newName })
+            .eq('id', siteId);
+
+        if (error) {
+            showToast("이름 수정 실패: " + error.message, true);
+            return;
+        }
+    }
+
+    editingSiteId = null;
+    showToast("현장 이름이 수정되었습니다.");
+    loadUserSites();
+}
+
+function cancelEditSiteName(event) {
+    if (event) event.stopPropagation();
+    editingSiteId = null;
+    renderSiteList();
+}
 
 async function createNewSite() {
     const siteName = prompt("새 분양 현장 이름을 입력하세요:");
@@ -134,7 +538,6 @@ async function deleteSite(siteId, event) {
 async function selectSite(siteId) {
     currentSiteId = siteId;
 
-    // [0.01초 터치 반응] 카드 터치 즉시 로딩 오버레이 표시
     const cardEl = document.getElementById(`siteCard_${siteId}`);
     if (cardEl) {
         cardEl.classList.add('opacity-80', 'pointer-events-none');
@@ -144,12 +547,11 @@ async function selectSite(siteId) {
     try {
         let site = userSites.find(s => s.id === siteId);
 
-        // 해당 현장의 브리핑 데이터만 싱글 쿼리로 초고속 불러오기
         if (window.supabaseClient) {
             const { data, error } = await window.supabaseClient
                 .from('sites')
                 .select('id, name, data')
-                .eq('id', siteId')
+                .eq('id', siteId)
                 .single();
 
             if (!error && data) {
