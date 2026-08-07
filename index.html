@@ -19,7 +19,6 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <link rel="stylesheet" href="css/desktop.css">
 
-
     <script>
       // ====================================================
       // [★ Supabase 설정 정보 ★]
@@ -36,52 +35,61 @@
 
 <body class="bg-slate-950 text-gray-800 h-screen w-screen overflow-hidden flex flex-col md:flex-row select-none">
 
-    <!-- 1. 로그인 / 간편 가입 모달 -->
-    <div id="authModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-2xl text-white">
+    <!-- 1. 단정하고 고급스러운 전용 로그인 화면 (흐릿한 비침 제거) -->
+    <div id="authModal" class="fixed inset-0 bg-gradient-to-br from-slate-950 via-[#0d1b3e] to-slate-900 z-50 flex items-center justify-center p-4">
+        <!-- 은은한 원형 조명 효과 배경 -->
+        <div class="absolute w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="relative bg-slate-900/90 border border-slate-800/80 rounded-3xl p-7 md:p-9 w-full max-w-sm shadow-2xl shadow-emerald-950/20 text-white backdrop-blur-none">
             <div class="text-center mb-6">
-                <img id="loginLogo" src="images/rogo.png" alt="로고" class="h-10 mx-auto mb-3 object-contain" onerror="this.onerror=null; this.src='https://placehold.co/150x50/0d1b3e/ffffff?text=VIP+BRIEFING';">
-                <h2 class="text-xl font-bold tracking-tight text-white">VIP 브리핑북 통합 관리</h2>
-                <p class="text-xs text-slate-400 mt-1">아이디로 간편하게 로그인하세요.</p>
+                <div class="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl mx-auto flex items-center justify-center mb-3">
+                    <i class="fa-solid fa-folder-tree text-emerald-400 text-xl"></i>
+                </div>
+                <h2 class="text-xl font-extrabold tracking-tight text-white">VIP 브리핑북 시스템</h2>
+                <p class="text-xs text-slate-400 mt-1">등록된 아이디로 안전하게 로그인하세요.</p>
             </div>
 
-            <form id="loginForm" class="flex flex-col gap-3">
+            <!-- 로그인 폼 -->
+            <form id="loginForm" class="flex flex-col gap-3.5">
                 <div>
-                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">아이디</label>
-                    <input type="text" id="authUserId" required placeholder="아이디 입력" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">아이디</label>
+                    <input type="text" id="authUserId" required placeholder="아이디 입력" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600 transition-colors">
                 </div>
                 <div>
-                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">비밀번호</label>
-                    <input type="password" id="authPassword" required placeholder="비밀번호 입력" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">비밀번호</label>
+                    <input type="password" id="authPassword" required placeholder="비밀번호 입력" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600 transition-colors">
                 </div>
                 
-                <div class="flex items-center gap-2 py-1">
-                    <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded bg-slate-800 border-slate-700 text-emerald-600 focus:ring-0 cursor-pointer" checked>
-                    <label for="rememberMe" class="text-xs text-slate-300 cursor-pointer">로그인 상태 유지하기</label>
+                <!-- 로그인 상태 유지 체크박스 -->
+                <div class="flex items-center gap-2 py-0.5">
+                    <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-600 focus:ring-0 cursor-pointer" checked>
+                    <label for="rememberMe" class="text-xs text-slate-300 cursor-pointer font-medium">로그인 상태 유지하기</label>
                 </div>
 
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg mt-1 transition-all">
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl text-xs shadow-lg shadow-emerald-950/50 mt-1 transition-all active:scale-[0.98]">
                     로그인하기
                 </button>
-                <div class="flex items-center justify-between mt-2 text-xs text-slate-400">
+                
+                <div class="flex items-center justify-between mt-1 text-xs text-slate-400 pt-2 border-t border-slate-800/80">
                     <span>계정이 없으신가요?</span>
                     <button type="button" onclick="toggleAuthMode('signup')" class="text-emerald-400 font-bold hover:underline">간편 회원가입</button>
                 </div>
             </form>
 
-            <form id="signupForm" class="hidden flex-col gap-3">
+            <!-- 간편 회원가입 폼 -->
+            <form id="signupForm" class="hidden flex-col gap-3.5">
                 <div>
-                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">사용할 아이디</label>
-                    <input type="text" id="signupUserId" required placeholder="영문 또는 숫자 아이디" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">사용할 아이디</label>
+                    <input type="text" id="signupUserId" required placeholder="영문 또는 숫자 아이디" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600">
                 </div>
                 <div>
-                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">비밀번호</label>
-                    <input type="password" id="signupPassword" required minlength="4" placeholder="4자리 이상 입력" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">비밀번호</label>
+                    <input type="password" id="signupPassword" required minlength="4" placeholder="4자리 이상 입력" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600">
                 </div>
-                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg mt-2 transition-all">
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl text-xs shadow-lg mt-1 transition-all active:scale-[0.98]">
                     3초 간편 가입 완료
                 </button>
-                <div class="flex items-center justify-between mt-2 text-xs text-slate-400">
+                <div class="flex items-center justify-between mt-1 text-xs text-slate-400 pt-2 border-t border-slate-800/80">
                     <span>이미 계정이 있으신가요?</span>
                     <button type="button" onclick="toggleAuthMode('login')" class="text-indigo-400 font-bold hover:underline">로그인으로 돌아가기</button>
                 </div>
