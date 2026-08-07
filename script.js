@@ -46,7 +46,7 @@ function showAuthModal() {
 }
 
 function showLobbyModal() {
-    // 로비 진입 시 모든 상태값 완벽 초기화
+    // 로비 진입 시 이전 작업 현장의 상태값 완벽 초기화
     currentSiteId = null;
     siteData = {};
     isEditMode = false;
@@ -59,7 +59,7 @@ function showLobbyModal() {
     loadUserSites();
 }
 
-// 편집 버튼 UI 초기화 전용 함수
+// 편집 상태 UI 강제 리셋 함수
 function resetEditUI() {
     const btnDesktop = document.getElementById('editToggleBtnDesktop');
     const textDesktop = document.getElementById('editToggleTextDesktop');
@@ -264,17 +264,23 @@ function cancelEditSiteName(event) {
     renderSiteList();
 }
 
-// [개선 3 해결] 완전히 독립된 깨끗한 데이터 베이스로 새 현장 생성
+// [개선 1] 타임스탬프 기반 고유 키를 가진 100% 독립된 깨끗한 기본 틀로 생성
 async function createNewSite() {
     const siteName = prompt("새 분양 현장 이름을 입력하세요:");
     if (!siteName || !siteName.trim()) return;
 
-    // 매번 새로운 독립 객체 생성 (깊은 구조)
+    const now = Date.now();
     const freshData = {
-        "cat_1": {
+        [`cat_${now}_1`]: {
             title: "사업안내",
             subItems: [
                 { name: "사업개요", images: [] }
+            ]
+        },
+        [`cat_${now}_2`]: {
+            title: "단지안내",
+            subItems: [
+                { name: "단지 배치도", images: [] }
             ]
         }
     };
@@ -303,15 +309,15 @@ async function deleteSite(siteId, event) {
     }
 }
 
-// [개선 1, 2 해결] 현장 선택 시 독립적인 깊은 복사(JSON parse/stringify) 및 상태 초기화
+// [개선 2] 현장 선택 시 깊은 복사(Deep Clone) 및 상태값 완전 초기화
 function selectSite(siteId) {
     currentSiteId = siteId;
     const site = userSites.find(s => s.id === siteId);
     if (!site) return;
 
-    // 깊은 복사를 통해 데이터 참조 꼬임 완벽 방지
+    // 데이터 복제를 통한 참조 혼선 차단
     siteData = JSON.parse(JSON.stringify(site.data || {}));
-    isEditMode = false; // 편집모드 초기화
+    isEditMode = false;
     resetEditUI();
 
     const keys = Object.keys(siteData);
@@ -594,8 +600,24 @@ function initNav() {
     if (primaryNavMobile) primaryNavMobile.innerHTML = '';
 
     const keys = Object.keys(siteData);
-    if (keys.length === 0) { renderSecondaryNav(); return; }
-    if (!currentMain || !siteData[currentMain]) currentMain = keys[0];
+
+    // 목차가 비어있는 경우에도 편집 모드 시 추가 버튼이 사라지지 않도록 보장
+    if (keys.length === 0) {
+        currentMain = null;
+        if (primaryNavDesktop && isEditMode) {
+            const addBtn = document.createElement('button');
+            addBtn.className = "no-drag w-full py-2 px-3 rounded-xl text-xs font-bold border-2 border-dashed border-emerald-400/50 hover:border-emerald-400 text-emerald-300 flex items-center justify-center gap-1 mt-2";
+            addBtn.onclick = addMainCategory;
+            addBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 메인목차 추가`;
+            primaryNavDesktop.appendChild(addBtn);
+        }
+        renderSecondaryNav();
+        return;
+    }
+
+    if (!currentMain || !siteData[currentMain]) {
+        currentMain = keys[0];
+    }
 
     keys.forEach(key => {
         const item = siteData[key];
@@ -603,15 +625,23 @@ function initNav() {
 
         if (primaryNavDesktop) {
             const btn = document.createElement('div');
-            btn.className = `main-nav-item w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between shadow-sm flex-shrink-0 border ${isActive ? 'bg-[#1b4d24] text-white border-emerald-600' : 'bg-white text-slate-800 hover:bg-slate-100 border-transparent'}`;
+            btn.className = `main-nav-item w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between shadow-sm flex-shrink-0 border cursor-pointer ${isActive ? 'bg-[#1b4d24] text-white border-emerald-600' : 'bg-white text-slate-800 hover:bg-slate-100 border-transparent'}`;
             btn.setAttribute('data-key', key);
+
+            // 전체 탭 클릭 바인딩 (이벤트 누락 방지)
+            btn.onclick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                currentMain = key;
+                currentSubIndex = 0;
+                initNav();
+            };
 
             const dragHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 hover:text-emerald-300 mr-2.5 py-1 px-1 text-sm cursor-grab active:cursor-grabbing" onclick="event.stopPropagation()"></i>` : '';
             const delHtml = isEditMode ? `<button onclick="deleteMainCategory('${key}', event)" class="text-red-400 hover:text-red-200 p-1 rounded hover:bg-red-900/30"><i class="fa-solid fa-xmark"></i></button>` : '';
 
             btn.innerHTML = `
                 ${dragHtml}
-                <div class="flex-1 truncate cursor-pointer py-0.5" onclick="currentMain='${key}'; currentSubIndex=0; initNav();">
+                <div class="flex-1 truncate py-0.5">
                     <span class="truncate">${item.title}</span>
                 </div>
                 ${delHtml}
@@ -621,13 +651,20 @@ function initNav() {
 
         if (primaryNavMobile) {
             const btnM = document.createElement('div');
-            btnM.className = `main-nav-item py-1.5 px-3 rounded-lg text-[14px] font-bold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-2 shadow ${isActive ? 'bg-[#1b4d24] text-white' : 'bg-white/10 text-slate-200'}`;
+            btnM.className = `main-nav-item py-1.5 px-3 rounded-lg text-[14px] font-bold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-2 shadow cursor-pointer ${isActive ? 'bg-[#1b4d24] text-white' : 'bg-white/10 text-slate-200'}`;
             btnM.setAttribute('data-key', key);
+
+            btnM.onclick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                currentMain = key;
+                currentSubIndex = 0;
+                initNav();
+            };
 
             const dragMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-300 text-xs py-1 px-1" onclick="event.stopPropagation()"></i>` : '';
             btnM.innerHTML = `
                 ${dragMobileHtml}
-                <span class="cursor-pointer" onclick="currentMain='${key}'; currentSubIndex=0; initNav();">${item.title}</span>
+                <span>${item.title}</span>
             `;
             primaryNavMobile.appendChild(btnM);
         }
@@ -662,45 +699,59 @@ function renderSecondaryNav() {
     const currentObj = siteData[currentMain];
     if (subTitle) subTitle.innerText = currentObj.title;
 
-    if (currentObj.subItems) {
-        currentObj.subItems.forEach((sub, index) => {
-            const isActive = index === currentSubIndex;
-
-            if (secondaryNavDesktop) {
-                const btn = document.createElement('div');
-                btn.className = `sub-nav-item w-full py-2 px-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-between flex-shrink-0 border ${isActive ? 'bg-[#0d1b3e] text-white font-bold border-slate-600 shadow-md' : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'}`;
-                btn.setAttribute('data-index', index);
-
-                const dragSubHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 hover:text-slate-600 mr-2 py-1 px-1 cursor-grab active:cursor-grabbing text-xs" onclick="event.stopPropagation()"></i>` : '';
-                const delSubHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
-
-                btn.innerHTML = `
-                    ${dragSubHtml}
-                    <div class="flex-1 truncate cursor-pointer py-0.5" onclick="currentSubIndex=${index}; renderSecondaryNav();">
-                        <span class="truncate">${sub.name}</span>
-                    </div>
-                    ${delSubHtml}
-                `;
-                secondaryNavDesktop.appendChild(btn);
-            }
-
-            if (secondaryNavMobile) {
-                const btnM = document.createElement('div');
-                btnM.className = `sub-nav-item py-1 px-2.5 rounded-md text-[12px] font-semibold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-1.5 ${isActive ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-700 border border-slate-300'}`;
-                btnM.setAttribute('data-index', index);
-
-                const dragSubMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 text-[10px] py-1 px-0.5" onclick="event.stopPropagation()"></i>` : '';
-                const delSubMobileHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-red-500 ml-1 p-0.5"><i class="fa-solid fa-xmark text-[11px]"></i></button>` : '';
-
-                btnM.innerHTML = `
-                    ${dragSubMobileHtml}
-                    <span class="cursor-pointer" onclick="currentSubIndex=${index}; renderSecondaryNav();">${sub.name}</span>
-                    ${delSubMobileHtml}
-                `;
-                secondaryNavMobile.appendChild(btnM);
-            }
-        });
+    if (!currentObj.subItems) {
+        currentObj.subItems = [];
     }
+
+    currentObj.subItems.forEach((sub, index) => {
+        const isActive = index === currentSubIndex;
+
+        if (secondaryNavDesktop) {
+            const btn = document.createElement('div');
+            btn.className = `sub-nav-item w-full py-2 px-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-between flex-shrink-0 border cursor-pointer ${isActive ? 'bg-[#0d1b3e] text-white font-bold border-slate-600 shadow-md' : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'}`;
+            btn.setAttribute('data-index', index);
+
+            btn.onclick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                currentSubIndex = index;
+                renderSecondaryNav();
+            };
+
+            const dragSubHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 hover:text-slate-600 mr-2 py-1 px-1 cursor-grab active:cursor-grabbing text-xs" onclick="event.stopPropagation()"></i>` : '';
+            const delSubHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
+
+            btn.innerHTML = `
+                ${dragSubHtml}
+                <div class="flex-1 truncate py-0.5">
+                    <span class="truncate">${sub.name}</span>
+                </div>
+                ${delSubHtml}
+            `;
+            secondaryNavDesktop.appendChild(btn);
+        }
+
+        if (secondaryNavMobile) {
+            const btnM = document.createElement('div');
+            btnM.className = `sub-nav-item py-1 px-2.5 rounded-md text-[12px] font-semibold whitespace-nowrap flex-shrink-0 touch-manipulation flex items-center gap-1.5 cursor-pointer ${isActive ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-700 border border-slate-300'}`;
+            btnM.setAttribute('data-index', index);
+
+            btnM.onclick = (e) => {
+                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                currentSubIndex = index;
+                renderSecondaryNav();
+            };
+
+            const dragSubMobileHtml = isEditMode ? `<i class="fa-solid fa-bars drag-handle text-slate-400 text-[10px] py-1 px-0.5" onclick="event.stopPropagation()"></i>` : '';
+            const delSubMobileHtml = isEditMode ? `<button onclick="deleteSubCategory(${index}, event)" class="text-slate-400 hover:text-red-500 ml-1 p-0.5"><i class="fa-solid fa-xmark text-[11px]"></i></button>` : '';
+
+            btnM.innerHTML = `
+                ${dragSubMobileHtml}
+                <span>${sub.name}</span>
+                ${delSubMobileHtml}
+            `;
+            secondaryNavMobile.appendChild(btnM);
+        }
+    });
 
     if (secondaryNavDesktop && isEditMode) {
         const addSubBtn = document.createElement('button');
