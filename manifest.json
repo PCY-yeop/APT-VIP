@@ -1,10 +1,10 @@
 {
-  "name": "숭의역 라온프라이빗 스카이브",
-  "short_name": "라온스카이브",
+  "name": "브리핑북",
+  "short_name": "브리핑북",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d1b3e",
-  "theme_color": "#0d1b3e",
+  "background_color": "#020617",
+  "theme_color": "#020617",
   "icons": [
     { "src": "images/rogo.png", "sizes": "192x192", "type": "image/png" }
   ]
