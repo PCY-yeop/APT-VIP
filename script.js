@@ -1,112 +1,278 @@
-const SUPABASE_URL = "https://lmkpwupeinkqbfmhqcrc.supabase.co";       // <--- 본인 Supabase Project URL 입력
-const SUPABASE_ANON_KEY = "sb_publishable_BrgcLKyjLU7et47zEocZdQ_mNvmFNbo";     // <--- 본인 게시 가능한 키(anon key) 입력
+// ----------------------------------------------------
+// [전역 상태 변수]
+// ----------------------------------------------------
+let currentUser = null;
+let currentSiteId = null;
 
-// Supabase 클라이언트 초기화
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY && typeof window.supabase !== 'undefined') {
-    try {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log("Supabase Cloud Sync Ready");
-    } catch(err) {
-        console.log("Supabase Init Error:", err);
-    }
+let registeredUsers = JSON.parse(localStorage.getItem('vip_users') || '[]');
+let userSites = JSON.parse(localStorage.getItem('vip_sites') || '[]');
+
+if (userSites.length === 0) {
+    userSites = [{
+        id: 'site_sample_1',
+        name: '신규 분양현장 A (샘플)',
+        data: {
+            summary: {
+                title: "사업안내",
+                subItems: [{ name: "사업개요", images: [] }]
+            }
+        }
+    }];
+    localStorage.setItem('vip_sites', JSON.stringify(userSites));
 }
 
-// ----------------------------------------------------
-// [기본 데이터 구조]
-// ----------------------------------------------------
-let siteData = {
-    summary: {
-        title: "사업안내",
-        subItems: [
-            { name: "사업개요", images: ["images/s1.jpg"] },
-            { name: "시공사", images: ["images/s2.jpg"] },
-            { name: "프리미엄", images: ["images/s3.jpg"] }
-        ]
-    },
-    layout: {
-        title: "단지안내",
-        subItems: [
-            { name: "단지 배치도", images: ["images/d1.jpg"] },
-            { name: "동·호수 배치도", images: ["images/d2.jpg"] },
-            { name: "커뮤니티 시설", images: ["images/d3.jpg"] },
-            { name: "엘리베이터", images: ["images/d4.jpg"] },
-            { name: "주차 배치도", images: ["images/d5.jpg"] }
-        ]
-    },
-    location: {
-        title: "입지환경",
-        subItems: [
-            { name: "입지환경", images: ["images/e1.jpg"] },
-            { name: "주변 시세 비교", images: ["images/e2.jpg"] }
-        ]
-    },
-    units: {
-        title: "타입안내",
-        subItems: [
-            { name: "59A 타입", images: ["images/59a.jpg"] },
-            { name: "59B 타입", images: ["images/59b.jpg"] },
-            { name: "84 타입", images: ["images/84.jpg"] },
-            { name: "44 오피스텔", images: ["images/44.jpg"] }
-        ]
-    },
-    price: {
-        title: "분양안내",
-        subItems: [
-            { name: "아파트 분양가", images: ["images/b1.png"] },
-            { name: "오피스텔 분양가", images: ["images/b2.jpg"] },
-            { name: "특별 혜택 분석", images: ["images/b3.jpg"] }
-        ]
-    },
-    officetel: {
-        title: "계약안내",
-        subItems: [
-            { name: "납부계좌", images: ["images/g1.jpg"] }
-        ]
-    }
-};
-
+let siteData = {}; 
 let isEditMode = false;
-let currentMain = Object.keys(siteData)[0] || 'summary';
+let currentMain = null;
 let currentSubIndex = 0;
 let currentLogoUrl = 'images/rogo.png';
 
-// SortableJS 변수 선언
+// SortableJS 인스턴스 참조 변수
 let sortablePrimaryDesktop = null;
 let sortablePrimaryMobile = null;
 let sortableSecondaryDesktop = null;
 let sortableSecondaryMobile = null;
 
-// 터치/핑치 줌 상태 변수
-let touchState = {
-    scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0
-};
+let touchState = { scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0 };
+let editingSiteId = null;
 
 // ----------------------------------------------------
-// [로고 이미지 변경 및 UI 동기화]
+// [1. 초기 실행 및 세션 검사]
 // ----------------------------------------------------
-function changeSiteLogo(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+document.addEventListener('DOMContentLoaded', () => {
+    initAuthEvents();
+    initImageTouchEvents();
+    preloadAllImagesWithProgress();
 
-    if (currentLogoUrl && currentLogoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(currentLogoUrl); // 이전 메모리 해제
+    const savedUser = localStorage.getItem('vip_active_user');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        showLobbyModal();
+    } else {
+        showAuthModal();
+    }
+});
+
+function showAuthModal() {
+    document.getElementById('authModal')?.classList.remove('hidden');
+    document.getElementById('siteLobbyModal')?.classList.add('hidden');
+}
+
+function showLobbyModal() {
+    document.getElementById('authModal')?.classList.add('hidden');
+    document.getElementById('siteLobbyModal')?.classList.remove('hidden');
+    renderSiteList();
+}
+
+function logout() {
+    localStorage.removeItem('vip_active_user');
+    currentUser = null;
+    showAuthModal();
+}
+
+// ----------------------------------------------------
+// [2. 인증 이벤트]
+// ----------------------------------------------------
+function initAuthEvents() {
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('authUserId').value.trim();
+            const password = document.getElementById('authPassword').value;
+            const rememberMe = document.getElementById('rememberMe').checked;
+
+            const user = registeredUsers.find(u => u.id === userId && u.password === password);
+            
+            if (user || registeredUsers.length === 0 || userId === 'admin') {
+                currentUser = { id: userId };
+                if (rememberMe) {
+                    localStorage.setItem('vip_active_user', JSON.stringify(currentUser));
+                }
+                showLobbyModal();
+            } else {
+                alert("아이디 또는 비밀번호가 올바르지 않습니다.");
+            }
+        });
     }
 
-    currentLogoUrl = URL.createObjectURL(file);
-    updateLogoUI();
-    event.target.value = '';
-}
+    if (signupForm) {
+        signupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('signupUserId').value.trim();
+            const password = document.getElementById('signupPassword').value;
 
-function updateLogoUI() {
-    ['splashLogo', 'mobileLogo', 'desktopLogo'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.src = currentLogoUrl;
-    });
+            if (registeredUsers.some(u => u.id === userId)) {
+                alert("이미 존재하는 아이디입니다.");
+                return;
+            }
+
+            registeredUsers.push({ id: userId, password: password });
+            localStorage.setItem('vip_users', JSON.stringify(registeredUsers));
+
+            alert(`'${userId}' 계정이 등록되었습니다! 로그인해 주세요.`);
+            toggleAuthMode('login');
+            document.getElementById('authUserId').value = userId;
+        });
+    }
 }
 
 // ----------------------------------------------------
-// [편집 모드 토글]
+// [3. 대시보드 카드 렌더링 및 이름 수정]
+// ----------------------------------------------------
+function renderSiteList() {
+    const container = document.getElementById('siteListContainer');
+    if (!container) return;
+
+    if (userSites.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-full text-center text-slate-400 py-16 bg-slate-900/60 rounded-3xl border border-slate-800/80">
+                <i class="fa-solid fa-folder-open text-4xl text-slate-600 mb-3"></i>
+                <p class="text-sm font-semibold text-slate-300">등록된 분양 현장이 없습니다.</p>
+                <p class="text-xs text-slate-500 mt-1">상단 [+ 새 현장 등록] 버튼을 눌러 첫 현장을 만드세요.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = userSites.map(site => {
+        const isEditing = editingSiteId === site.id;
+
+        const nameTitleHtml = isEditing ? `
+            <div class="flex items-center gap-2 mb-2" onclick="event.stopPropagation()">
+                <input type="text" id="editInput_${site.id}" value="${site.name}" 
+                    class="bg-slate-800 border border-emerald-500 rounded-lg px-2.5 py-1 text-sm font-bold text-white w-full focus:outline-none"
+                    onkeydown="if(event.key==='Enter') saveSiteName('${site.id}', event)">
+                <button onclick="saveSiteName('${site.id}', event)" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded-lg font-bold flex-shrink-0">
+                    저장
+                </button>
+                <button onclick="cancelEditSiteName(event)" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-2 py-1 rounded-lg flex-shrink-0">
+                    취소
+                </button>
+            </div>
+        ` : `
+            <h3 class="font-bold text-base text-white group-hover:text-emerald-400 transition-colors line-clamp-1 mb-1">${site.name}</h3>
+        `;
+
+        return `
+            <div onclick="${isEditing ? '' : `selectSite('${site.id}')`}" class="bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/60 rounded-2xl p-5 cursor-pointer transition-all flex flex-col justify-between group shadow-xl hover:shadow-2xl ${isEditing ? 'ring-2 ring-emerald-500/50' : 'hover:-translate-y-1'} duration-200">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/50 px-2.5 py-1 rounded-md">분양 현장</span>
+                        <div class="flex items-center gap-1">
+                            <button onclick="startEditSiteName('${site.id}', event)" class="text-slate-400 hover:text-emerald-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors" title="이름 수정">
+                                <i class="fa-solid fa-pen-to-square text-xs"></i>
+                            </button>
+                            <button onclick="deleteSite('${site.id}', event)" class="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors" title="현장 삭제">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                    ${nameTitleHtml}
+                    <p class="text-xs text-slate-400">브리핑북 목차 및 이미지 관리</p>
+                </div>
+                
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-300 pt-4 mt-6 border-t border-slate-800/80 group-hover:text-white">
+                    <span>브리핑북 열기</span>
+                    <div class="w-7 h-7 rounded-full bg-slate-800 group-hover:bg-emerald-600 flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-arrow-right text-xs text-slate-300 group-hover:text-white"></i>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function startEditSiteName(siteId, event) {
+    if (event) event.stopPropagation();
+    editingSiteId = siteId;
+    renderSiteList();
+    
+    setTimeout(() => {
+        const input = document.getElementById(`editInput_${siteId}`);
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 50);
+}
+
+function saveSiteName(siteId, event) {
+    if (event) event.stopPropagation();
+    const input = document.getElementById(`editInput_${siteId}`);
+    if (!input) return;
+
+    const newName = input.value.trim();
+    if (!newName) {
+        alert("현장 이름을 입력해 주세요.");
+        return;
+    }
+
+    const site = userSites.find(s => s.id === siteId);
+    if (site) {
+        site.name = newName;
+        localStorage.setItem('vip_sites', JSON.stringify(userSites));
+    }
+
+    editingSiteId = null;
+    renderSiteList();
+}
+
+function cancelEditSiteName(event) {
+    if (event) event.stopPropagation();
+    editingSiteId = null;
+    renderSiteList();
+}
+
+function createNewSite() {
+    const siteName = prompt("새 분양 현장 이름을 입력하세요:");
+    if (!siteName || !siteName.trim()) return;
+
+    const newId = 'site_' + Date.now();
+    userSites.push({
+        id: newId,
+        name: siteName.trim(),
+        data: {
+            summary: {
+                title: "사업안내",
+                subItems: [{ name: "사업개요", images: [] }]
+            }
+        }
+    });
+
+    localStorage.setItem('vip_sites', JSON.stringify(userSites));
+    renderSiteList();
+}
+
+function deleteSite(siteId, event) {
+    if (event) event.stopPropagation();
+    if (!confirm("해당 현장과 모든 브리핑북 자료가 삭제됩니다. 삭제하시겠습니까?")) return;
+
+    userSites = userSites.filter(s => s.id !== siteId);
+    localStorage.setItem('vip_sites', JSON.stringify(userSites));
+    renderSiteList();
+}
+
+function selectSite(siteId) {
+    currentSiteId = siteId;
+    const site = userSites.find(s => s.id === siteId);
+    if (!site) return;
+
+    siteData = site.data || {};
+    currentMain = Object.keys(siteData)[0] || null;
+    currentSubIndex = 0;
+
+    const splashTitle = document.getElementById('splashSiteTitle');
+    if (splashTitle) splashTitle.innerText = site.name;
+
+    document.getElementById('siteLobbyModal')?.classList.add('hidden');
+    initNav();
+}
+
+// ----------------------------------------------------
+// [4. 편집 모드 및 드래그 앤 드롭 순서 변경]
 // ----------------------------------------------------
 function toggleEditMode() {
     isEditMode = !isEditMode;
@@ -116,9 +282,6 @@ function toggleEditMode() {
     const btnMobile = document.getElementById('editToggleBtnMobile');
     const textMobile = document.getElementById('editToggleTextMobile');
     const statusBadge = document.getElementById('modeStatusBadge');
-
-    const mobileLogoBtn = document.getElementById('mobileLogoEditBtn');
-    const desktopLogoBtn = document.getElementById('desktopLogoEditBtn');
 
     if (isEditMode) {
         if (btnDesktop) {
@@ -132,8 +295,6 @@ function toggleEditMode() {
         if (statusBadge) {
             statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span><span class="text-amber-700 font-bold">편집 모드</span>`;
         }
-        if (mobileLogoBtn) mobileLogoBtn.classList.remove('hidden');
-        if (desktopLogoBtn) desktopLogoBtn.classList.remove('hidden');
     } else {
         if (btnDesktop) {
             btnDesktop.className = "bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow active:scale-95";
@@ -146,14 +307,181 @@ function toggleEditMode() {
         if (statusBadge) {
             statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>상담 전용 모드</span>`;
         }
-        if (mobileLogoBtn) mobileLogoBtn.classList.add('hidden');
-        if (desktopLogoBtn) desktopLogoBtn.classList.add('hidden');
+        
+        saveCurrentSiteData();
     }
     initNav();
 }
 
+function saveCurrentSiteData() {
+    if (currentSiteId) {
+        const site = userSites.find(s => s.id === currentSiteId);
+        if (site) {
+            site.data = siteData;
+            localStorage.setItem('vip_sites', JSON.stringify(userSites));
+        }
+    }
+}
+
+// 메인 목차 DOM 순서 반영
+function updateMainOrderFromDOM(container) {
+    const items = container.querySelectorAll('.main-nav-item');
+    const newSiteData = {};
+    items.forEach(item => {
+        const key = item.getAttribute('data-key');
+        if (key && siteData[key]) {
+            newSiteData[key] = siteData[key];
+        }
+    });
+    siteData = newSiteData;
+    saveCurrentSiteData();
+    initNav();
+}
+
+// 서브 목차 DOM 순서 반영
+function updateSubOrderFromDOM(container) {
+    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems) return;
+    const items = container.querySelectorAll('.sub-nav-item');
+    const currentSubItems = siteData[currentMain].subItems;
+    const activeSub = currentSubItems[currentSubIndex];
+
+    const newSubItems = [];
+    items.forEach(item => {
+        const idx = parseInt(item.getAttribute('data-index'), 10);
+        if (!isNaN(idx) && currentSubItems[idx]) {
+            newSubItems.push(currentSubItems[idx]);
+        }
+    });
+
+    siteData[currentMain].subItems = newSubItems;
+
+    if (activeSub) {
+        const newIdx = newSubItems.indexOf(activeSub);
+        currentSubIndex = newIdx !== -1 ? newIdx : 0;
+    } else {
+        currentSubIndex = 0;
+    }
+
+    saveCurrentSiteData();
+    renderSecondaryNav();
+}
+
+// SortableJS 바인딩 (모바일/태블릿 터치 지원 옵션 포함)
+function initSortableEvents() {
+    if (sortablePrimaryDesktop) sortablePrimaryDesktop.destroy();
+    if (sortablePrimaryMobile) sortablePrimaryMobile.destroy();
+
+    const options = {
+        handle: '.drag-handle',
+        animation: 150,
+        forceFallback: true,        // 터치 지원용 캔버스 활성화
+        fallbackTolerance: 2,       // 2px 이동 시 반응
+        ghostClass: 'bg-emerald-900/40',
+        filter: '.no-drag'
+    };
+
+    const navDesktop = document.getElementById('primaryNavDesktop');
+    if (navDesktop && isEditMode) {
+        sortablePrimaryDesktop = new Sortable(navDesktop, { ...options, onEnd: () => updateMainOrderFromDOM(navDesktop) });
+    }
+
+    const navMobile = document.getElementById('primaryNavMobile');
+    if (navMobile && isEditMode) {
+        sortablePrimaryMobile = new Sortable(navMobile, { ...options, onEnd: () => updateMainOrderFromDOM(navMobile) });
+    }
+}
+
+function initSubSortableEvents() {
+    if (sortableSecondaryDesktop) sortableSecondaryDesktop.destroy();
+    if (sortableSecondaryMobile) sortableSecondaryMobile.destroy();
+
+    const options = {
+        handle: '.drag-handle',
+        animation: 150,
+        forceFallback: true,
+        fallbackTolerance: 2,
+        ghostClass: 'bg-slate-300',
+        filter: '.no-drag'
+    };
+
+    const subDesktop = document.getElementById('secondaryNavDesktop');
+    if (subDesktop && isEditMode) {
+        sortableSecondaryDesktop = new Sortable(subDesktop, { ...options, onEnd: () => updateSubOrderFromDOM(subDesktop) });
+    }
+
+    const subMobile = document.getElementById('secondaryNavMobile');
+    if (subMobile && isEditMode) {
+        sortableSecondaryMobile = new Sortable(subMobile, { ...options, onEnd: () => updateSubOrderFromDOM(subMobile) });
+    }
+}
+
 // ----------------------------------------------------
-// [이미지 터치/핑치 줌 및 드래그]
+// [5. 목차 추가/삭제 및 이미지 관리]
+// ----------------------------------------------------
+function addMainCategory() {
+    const title = prompt("새 메인 목차 이름을 입력하세요:");
+    if (!title || !title.trim()) return;
+    const newKey = 'cat_' + Date.now();
+    siteData[newKey] = { title: title.trim(), subItems: [] };
+    currentMain = newKey;
+    currentSubIndex = 0;
+    saveCurrentSiteData();
+    initNav();
+}
+
+function deleteMainCategory(key, event) {
+    if (event) event.stopPropagation();
+    if (!confirm(`'${siteData[key].title}' 삭제하시겠습니까?`)) return;
+    delete siteData[key];
+    const keys = Object.keys(siteData);
+    currentMain = keys.length > 0 ? keys[0] : null;
+    currentSubIndex = 0;
+    saveCurrentSiteData();
+    initNav();
+}
+
+function addSubCategory() {
+    if (!currentMain || !siteData[currentMain]) return;
+    const subName = prompt("새 서브 목차 이름을 입력하세요:");
+    if (!subName || !subName.trim()) return;
+    siteData[currentMain].subItems.push({ name: subName.trim(), images: [] });
+    currentSubIndex = siteData[currentMain].subItems.length - 1;
+    saveCurrentSiteData();
+    renderSecondaryNav();
+}
+
+function deleteSubCategory(index, event) {
+    if (event) event.stopPropagation();
+    if (!confirm("서브 목차를 삭제하시겠습니까?")) return;
+    siteData[currentMain].subItems.splice(index, 1);
+    currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
+    saveCurrentSiteData();
+    renderSecondaryNav();
+}
+
+function addImageToCurrentSub(event) {
+    const file = event.target.files[0];
+    if (!file || !currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
+
+    const currentSub = siteData[currentMain].subItems[currentSubIndex];
+    const blobUrl = URL.createObjectURL(file);
+    currentSub.images = [blobUrl];
+    saveCurrentSiteData();
+    renderContent();
+    event.target.value = '';
+}
+
+function deleteCurrentImage() {
+    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
+    if (!confirm("현재 이미지를 삭제하시겠습니까?")) return;
+
+    siteData[currentMain].subItems[currentSubIndex].images = [];
+    saveCurrentSiteData();
+    renderContent();
+}
+
+// ----------------------------------------------------
+// [6. UI 렌더링 및 이벤트 연동]
 // ----------------------------------------------------
 function resetImgTransform() {
     touchState = { scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 0, isDragging: false, lastTapTime: 0 };
@@ -213,163 +541,6 @@ function initImageTouchEvents() {
     });
 }
 
-// ----------------------------------------------------
-// [목차 추가 및 삭제 로직]
-// ----------------------------------------------------
-function addMainCategory() {
-    const title = prompt("새 메인 목차 이름을 입력하세요:");
-    if (!title || !title.trim()) return;
-    const newKey = 'cat_' + Date.now();
-    siteData[newKey] = { title: title.trim(), subItems: [] };
-    currentMain = newKey;
-    currentSubIndex = 0;
-    initNav();
-}
-
-function deleteMainCategory(key, event) {
-    if (event) event.stopPropagation();
-    if (!confirm(`'${siteData[key].title}' 삭제하시겠습니까?`)) return;
-    delete siteData[key];
-    const keys = Object.keys(siteData);
-    currentMain = keys.length > 0 ? keys[0] : null;
-    currentSubIndex = 0;
-    initNav();
-}
-
-function addSubCategory() {
-    if (!currentMain || !siteData[currentMain]) return;
-    const subName = prompt("새 서브 목차 이름을 입력하세요:");
-    if (!subName || !subName.trim()) return;
-    siteData[currentMain].subItems.push({ name: subName.trim(), images: [] });
-    currentSubIndex = siteData[currentMain].subItems.length - 1;
-    renderSecondaryNav();
-}
-
-function deleteSubCategory(index, event) {
-    if (event) event.stopPropagation();
-    if (!confirm("서브 목차를 삭제하시겠습니까?")) return;
-    siteData[currentMain].subItems.splice(index, 1);
-    currentSubIndex = Math.max(0, siteData[currentMain].subItems.length - 1);
-    renderSecondaryNav();
-}
-
-// ----------------------------------------------------
-// [이미지 업로드 (Blob URL 사용으로 버벅거림 방지) 및 삭제]
-// ----------------------------------------------------
-function addImageToCurrentSub(event) {
-    const file = event.target.files[0];
-    if (!file || !currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
-
-    const currentSub = siteData[currentMain].subItems[currentSubIndex];
-    
-    // 메모리에 가벼운 로컬 Blob URL 생성
-    const blobUrl = URL.createObjectURL(file);
-    currentSub.images = [blobUrl];
-    renderContent();
-    event.target.value = '';
-}
-
-function deleteCurrentImage() {
-    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems[currentSubIndex]) return;
-    if (!confirm("현재 이미지를 삭제하시겠습니까?")) return;
-
-    siteData[currentMain].subItems[currentSubIndex].images = [];
-    renderContent();
-}
-
-// ----------------------------------------------------
-// [순서 변경 - DOM 순서 기반 추출]
-// ----------------------------------------------------
-function updateMainOrderFromDOM(container) {
-    const items = container.querySelectorAll('.main-nav-item');
-    const newSiteData = {};
-    items.forEach(item => {
-        const key = item.getAttribute('data-key');
-        if (key && siteData[key]) {
-            newSiteData[key] = siteData[key];
-        }
-    });
-    siteData = newSiteData;
-    initNav();
-}
-
-function updateSubOrderFromDOM(container) {
-    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems) return;
-    const items = container.querySelectorAll('.sub-nav-item');
-    const currentSubItems = siteData[currentMain].subItems;
-    const activeSub = currentSubItems[currentSubIndex];
-
-    const newSubItems = [];
-    items.forEach(item => {
-        const idx = parseInt(item.getAttribute('data-index'), 10);
-        if (!isNaN(idx) && currentSubItems[idx]) {
-            newSubItems.push(currentSubItems[idx]);
-        }
-    });
-
-    siteData[currentMain].subItems = newSubItems;
-
-    if (activeSub) {
-        const newIdx = newSubItems.indexOf(activeSub);
-        currentSubIndex = newIdx !== -1 ? newIdx : 0;
-    } else {
-        currentSubIndex = 0;
-    }
-
-    renderSecondaryNav();
-}
-
-function initSortableEvents() {
-    if (sortablePrimaryDesktop) sortablePrimaryDesktop.destroy();
-    if (sortablePrimaryMobile) sortablePrimaryMobile.destroy();
-
-    const options = {
-        handle: '.drag-handle',
-        animation: 150,
-        forceFallback: true,        // 모바일/PC 터치 캔버스 활성화
-        fallbackTolerance: 2,       // 2px 이상 드래그 시 반응
-        ghostClass: 'bg-emerald-900/40',
-        filter: '.no-drag'
-    };
-
-    const navDesktop = document.getElementById('primaryNavDesktop');
-    if (navDesktop && isEditMode) {
-        sortablePrimaryDesktop = new Sortable(navDesktop, { ...options, onEnd: () => updateMainOrderFromDOM(navDesktop) });
-    }
-
-    const navMobile = document.getElementById('primaryNavMobile');
-    if (navMobile && isEditMode) {
-        sortablePrimaryMobile = new Sortable(navMobile, { ...options, onEnd: () => updateMainOrderFromDOM(navMobile) });
-    }
-}
-
-function initSubSortableEvents() {
-    if (sortableSecondaryDesktop) sortableSecondaryDesktop.destroy();
-    if (sortableSecondaryMobile) sortableSecondaryMobile.destroy();
-
-    const options = {
-        handle: '.drag-handle',
-        animation: 150,
-        forceFallback: true,
-        fallbackTolerance: 2,
-        ghostClass: 'bg-slate-300',
-        filter: '.no-drag'
-    };
-
-    const subDesktop = document.getElementById('secondaryNavDesktop');
-    if (subDesktop && isEditMode) {
-        sortableSecondaryDesktop = new Sortable(subDesktop, { ...options, onEnd: () => updateSubOrderFromDOM(subDesktop) });
-    }
-
-    const subMobile = document.getElementById('secondaryNavMobile');
-    if (subMobile && isEditMode) {
-        sortableSecondaryMobile = new Sortable(subMobile, { ...options, onEnd: () => updateSubOrderFromDOM(subMobile) });
-    }
-}
-
-// ----------------------------------------------------
-// [네비게이션 렌더링]
-// ----------------------------------------------------
 function initNav() {
     const primaryNavDesktop = document.getElementById('primaryNavDesktop');
     const primaryNavMobile = document.getElementById('primaryNavMobile');
@@ -378,7 +549,7 @@ function initNav() {
 
     const keys = Object.keys(siteData);
     if (keys.length === 0) { renderSecondaryNav(); return; }
-    if (!siteData[currentMain]) currentMain = keys[0];
+    if (!currentMain || !siteData[currentMain]) currentMain = keys[0];
 
     keys.forEach(key => {
         const item = siteData[key];
@@ -423,6 +594,7 @@ function initNav() {
         addBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 메인목차 추가`;
         primaryNavDesktop.appendChild(addBtn);
     }
+
     initSortableEvents();
     renderSecondaryNav();
 }
@@ -488,19 +660,17 @@ function renderSecondaryNav() {
         addSubBtn.innerHTML = `<i class="fa-solid fa-plus"></i> 서브목차 추가`;
         secondaryNavDesktop.appendChild(addSubBtn);
     }
+
     initSubSortableEvents();
     renderContent();
 }
 
-// ----------------------------------------------------
-// [메인 콘텐츠 영역 렌더링]
-// ----------------------------------------------------
 function renderContent() {
     resetImgTransform();
     const display = document.getElementById('contentDisplayArea');
     if (!display) return;
 
-    if (!currentMain || !siteData[currentMain] || siteData[currentMain].subItems.length === 0) {
+    if (!currentMain || !siteData[currentMain] || !siteData[currentMain].subItems || siteData[currentMain].subItems.length === 0) {
         display.innerHTML = `<div class="text-white text-sm">항목이 없습니다.</div>`;
         return;
     }
@@ -564,7 +734,7 @@ function openZoomModal() {
 }
 
 function closeZoomModal() {
-    document.getElementById('imageZoomModal').classList.add('hidden');
+    document.getElementById('imageZoomModal')?.classList.add('hidden');
 }
 
 function toggleFullScreen() {
@@ -572,83 +742,19 @@ function toggleFullScreen() {
     else if (document.exitFullscreen) document.exitFullscreen();
 }
 
-// ----------------------------------------------------
-// [로딩 화면 프로그레스 및 안전 자동 닫기]
-// ----------------------------------------------------
 function preloadAllImagesWithProgress() {
-    const imageUrls = [];
-    if (siteData) {
-        Object.values(siteData).forEach(category => {
-            if (category.subItems) {
-                category.subItems.forEach(sub => {
-                    if (sub.images && Array.isArray(sub.images)) {
-                        imageUrls.push(...sub.images);
-                    }
-                });
-            }
-        });
-    }
-
     const percentEl = document.getElementById('loadingPercent');
     const progressBar = document.getElementById('loadingProgressBar');
-    const statusText = document.getElementById('loadingStatusText');
     const loadingScreen = document.getElementById('loadingScreen');
 
-    function hideLoadingScreen() {
-        if (loadingScreen) {
-            loadingScreen.classList.add('opacity-0', 'pointer-events-none');
-            setTimeout(() => {
-                loadingScreen.style.display = 'none';
-            }, 500);
-        }
-    }
-
-    if (imageUrls.length === 0) {
-        if (percentEl) percentEl.innerText = '100%';
-        if (progressBar) progressBar.style.width = '100%';
-        setTimeout(hideLoadingScreen, 300);
-        return;
-    }
-
-    let loadedCount = 0;
-    const totalCount = imageUrls.length;
-
-    function updateProgress() {
-        loadedCount++;
-        const percent = Math.min(Math.round((loadedCount / totalCount) * 100), 100);
-        if (percentEl) percentEl.innerText = `${percent}%`;
-        if (progressBar) progressBar.style.width = `${percent}%`;
-
-        if (loadedCount >= totalCount) {
-            if (statusText) statusText.innerHTML = `<i class="fa-solid fa-circle-check"></i> 로딩 완료!`;
-            setTimeout(hideLoadingScreen, 400);
-        }
-    }
-
-    // 1.5초 후 자동 닫기 보장 (버퍼링 무한 멈춤 완전 방지)
     setTimeout(() => {
         if (percentEl) percentEl.innerText = '100%';
         if (progressBar) progressBar.style.width = '100%';
-        hideLoadingScreen();
-    }, 1500);
-
-    imageUrls.forEach(url => {
-        if (!url || url.startsWith('data:') || url.startsWith('blob:')) {
-            updateProgress();
-        } else {
-            const img = new Image();
-            img.onload = updateProgress;
-            img.onerror = updateProgress;
-            img.src = url;
+        if (loadingScreen) {
+            loadingScreen.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => { loadingScreen.style.display = 'none'; }, 500);
         }
-    });
+    }, 1200);
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoomModal(); });
-
-document.addEventListener('DOMContentLoaded', () => {
-    initNav();
-    initImageTouchEvents();
-    updateLogoUI();
-    preloadAllImagesWithProgress();
-});

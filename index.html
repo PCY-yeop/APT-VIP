@@ -3,31 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VIP 프라이빗 브리핑북</title>
+    <title>VIP 프라이빗 브리핑북 시스템</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="라온스카이브">
+    <meta name="apple-mobile-web-app-title" content="VIP 브리핑북">
     <meta name="theme-color" content="#0d1b3e">
     
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- SortableJS 드래그 앤 드롭 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <link rel="stylesheet" href="css/desktop.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+    <script>
+      // ====================================================
+      // [★ Supabase 설정 정보 ★]
+      // ====================================================
+    const SUPABASE_URL = "https://lmkpwupeinkqbfmhqcrc.supabase.co";       // <--- 본인 Supabase Project URL 입력
+    const SUPABASE_ANON_KEY = "sb_publishable_BrgcLKyjLU7et47zEocZdQ_mNvmFNbo";     // <--- 본인 게시 가능한 키(anon key) 입력
+        
+
+      if (typeof supabase !== 'undefined' && SUPABASE_URL && SUPABASE_ANON_KEY) {
+          window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    </script>
 </head>
 
-<body class="bg-slate-100 text-gray-800 h-screen w-screen overflow-hidden flex flex-col md:flex-row select-none">
+<body class="bg-slate-950 text-gray-800 h-screen w-screen overflow-hidden flex flex-col md:flex-row select-none">
 
-    <!-- 로딩 화면 -->
-    <div id="loadingScreen" class="fixed inset-0 bg-[#0d1b3e] z-50 flex flex-col items-center justify-center p-6 text-white transition-opacity duration-500">
+    <!-- 1. 로그인 / 간편 가입 모달 -->
+    <div id="authModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-2xl text-white">
+            <div class="text-center mb-6">
+                <img id="loginLogo" src="images/rogo.png" alt="로고" class="h-10 mx-auto mb-3 object-contain" onerror="this.onerror=null; this.src='https://placehold.co/150x50/0d1b3e/ffffff?text=VIP+BRIEFING';">
+                <h2 class="text-xl font-bold tracking-tight text-white">VIP 브리핑북 통합 관리</h2>
+                <p class="text-xs text-slate-400 mt-1">아이디로 간편하게 로그인하세요.</p>
+            </div>
+
+            <form id="loginForm" class="flex flex-col gap-3">
+                <div>
+                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">아이디</label>
+                    <input type="text" id="authUserId" required placeholder="아이디 입력" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                </div>
+                <div>
+                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">비밀번호</label>
+                    <input type="password" id="authPassword" required placeholder="비밀번호 입력" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                </div>
+                
+                <div class="flex items-center gap-2 py-1">
+                    <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded bg-slate-800 border-slate-700 text-emerald-600 focus:ring-0 cursor-pointer" checked>
+                    <label for="rememberMe" class="text-xs text-slate-300 cursor-pointer">로그인 상태 유지하기</label>
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg mt-1 transition-all">
+                    로그인하기
+                </button>
+                <div class="flex items-center justify-between mt-2 text-xs text-slate-400">
+                    <span>계정이 없으신가요?</span>
+                    <button type="button" onclick="toggleAuthMode('signup')" class="text-emerald-400 font-bold hover:underline">간편 회원가입</button>
+                </div>
+            </form>
+
+            <form id="signupForm" class="hidden flex-col gap-3">
+                <div>
+                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">사용할 아이디</label>
+                    <input type="text" id="signupUserId" required placeholder="영문 또는 숫자 아이디" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                </div>
+                <div>
+                    <label class="text-[11px] font-semibold text-slate-400 mb-1 block">비밀번호</label>
+                    <input type="password" id="signupPassword" required minlength="4" placeholder="4자리 이상 입력" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white">
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg mt-2 transition-all">
+                    3초 간편 가입 완료
+                </button>
+                <div class="flex items-center justify-between mt-2 text-xs text-slate-400">
+                    <span>이미 계정이 있으신가요?</span>
+                    <button type="button" onclick="toggleAuthMode('login')" class="text-indigo-400 font-bold hover:underline">로그인으로 돌아가기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. 전체 화면 고급 대시보드 (로비) -->
+    <div id="siteLobbyModal" class="hidden fixed inset-0 bg-slate-950 z-40 flex flex-col p-6 md:p-10 overflow-hidden">
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 max-w-6xl w-full mx-auto pb-6 border-b border-slate-800/80">
+            <div class="flex items-center gap-3.5">
+                <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                    <i class="fa-solid fa-layer-group text-xl text-emerald-400"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                        분양 현장 대시보드
+                    </h1>
+                    <p class="text-xs text-slate-400 mt-0.5">등록된 분양 현장들을 한눈에 관리하고 브리핑북을 구성하세요.</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <button onclick="logout()" class="text-slate-400 hover:text-red-400 text-xs font-semibold px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 transition-all hover:border-red-900/50">
+                    <i class="fa-solid fa-right-from-bracket mr-1"></i> 로그아웃
+                </button>
+                <button onclick="createNewSite()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-950/50 transition-all active:scale-95">
+                    <i class="fa-solid fa-plus text-xs"></i> 새 현장 등록
+                </button>
+            </div>
+        </header>
+        
+        <main class="max-w-6xl w-full mx-auto flex-1 overflow-y-auto pr-1">
+            <div id="siteListContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pb-6"></div>
+        </main>
+    </div>
+
+    <!-- 3. 로딩 화면 -->
+    <div id="loadingScreen" class="fixed inset-0 bg-[#0d1b3e] z-30 flex flex-col items-center justify-center p-6 text-white transition-opacity duration-500">
         <div class="mb-6 text-center">
-            <img id="splashLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/200x70/0d1b3e/ffffff?text=RAON+PRIVATE';" class="h-12 md:h-16 w-auto mx-auto mb-3 object-contain">
-            <h1 class="text-lg md:text-xl font-bold tracking-tight text-slate-100">숭의역 라온프라이빗 스카이브</h1>
-            <p class="text-xs text-slate-400 mt-1">VIP 프라이빗 브리핑북</p>
+            <img id="splashLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/200x70/0d1b3e/ffffff?text=VIP+BRIEFING';" class="h-12 md:h-16 w-auto mx-auto mb-3 object-contain">
+            <h1 id="splashSiteTitle" class="text-lg md:text-xl font-bold tracking-tight text-slate-100">분양 현장 브리핑북</h1>
+            <p class="text-xs text-slate-400 mt-1">VIP 프라이빗 브리핑 시스템</p>
         </div>
         <div class="w-full max-w-xs bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-2xl flex flex-col items-center">
             <div class="flex justify-between items-center w-full mb-2">
@@ -42,18 +138,16 @@
         </div>
     </div>
 
-    <!-- [모바일 상단 레이아웃] -->
-    <div class="flex flex-col md:hidden flex-shrink-0 z-30 raon-main text-white shadow-md">
+    <!-- 4. 모바일 상단 레이아웃 -->
+    <div class="flex flex-col md:hidden flex-shrink-0 z-20 raon-main text-white shadow-md">
         <div class="h-12 px-4 flex items-center justify-between border-b border-white/10">
             <div class="flex items-center gap-2">
+                <button onclick="showLobbyModal()" class="text-slate-300 hover:text-white p-1 mr-1" title="로비로 돌아가기">
+                    <i class="fa-solid fa-house text-sm"></i>
+                </button>
                 <div class="relative group">
                     <img id="mobileLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/120x40/0d1b3e/ffffff?text=LOGO';" class="h-7 w-auto object-contain">
-                    <label id="mobileLogoEditBtn" class="hidden absolute -inset-1 bg-black/60 rounded flex items-center justify-center text-amber-300 text-[10px] cursor-pointer font-bold">
-                        <i class="fa-solid fa-camera mr-1"></i> 변경
-                        <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
-                    </label>
                 </div>
-                <span class="text-xs font-bold text-slate-300">VIP 브리핑북</span>
             </div>
             <div class="flex items-center gap-2">
                 <button id="editToggleBtnMobile" onclick="toggleEditMode()" class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow">
@@ -74,17 +168,19 @@
         </div>
     </div>
 
-    <!-- [PC 좌측 사이드바] -->
+    <!-- 5. PC 좌측 사이드바 -->
     <aside class="hidden md:flex w-56 raon-main text-white flex-col justify-between items-center py-5 px-3 flex-shrink-0 z-20 shadow-xl h-full">
         <div class="w-full flex flex-col items-center flex-1 min-h-0">
             <div class="mb-5 text-center px-1 flex-shrink-0 relative group w-full">
-                <img id="desktopLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/160x60/0d1b3e/ffffff?text=logo.png';" class="max-h-14 w-auto mx-auto mb-1.5 object-contain">
-                <label id="desktopLogoEditBtn" class="hidden absolute inset-0 bg-black/70 rounded-xl flex items-center justify-center text-emerald-300 text-xs font-bold cursor-pointer transition-all border border-emerald-500/50 hover:bg-black/80">
-                    <i class="fa-solid fa-camera mr-1.5"></i> 로고 변경
-                    <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
-                </label>
+                <img id="desktopLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/160x60/0d1b3e/ffffff?text=LOGO';" class="max-h-14 w-auto mx-auto mb-1.5 object-contain">
             </div>
             <nav class="w-full flex flex-col gap-2.5 overflow-y-auto flex-1 pr-1" id="primaryNavDesktop"></nav>
+        </div>
+
+        <div class="w-full pt-3 border-t border-white/10 mt-auto">
+            <button onclick="showLobbyModal()" class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow border border-slate-700">
+                <i class="fa-solid fa-house text-emerald-400"></i> 현장 목록으로 이동
+            </button>
         </div>
     </aside>
 
@@ -102,13 +198,13 @@
         </div>
     </aside>
 
-    <!-- [우측 메인 콘텐츠] -->
+    <!-- 6. 메인 콘텐츠 영역 -->
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
         <header class="hidden md:flex h-12 bg-white border-b border-gray-200 px-6 items-center justify-between shadow-sm flex-shrink-0">
             <div class="flex items-center gap-3">
-                <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-md" id="currentCategoryBadge">사업개요</span>
+                <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-md" id="currentCategoryBadge">사업안내</span>
                 <i class="fa-solid fa-chevron-right text-xs text-gray-400"></i>
-                <h2 class="text-sm md:text-base font-bold text-gray-900" id="currentContentTitle">건축개요 및 사업안내</h2>
+                <h2 class="text-sm md:text-base font-bold text-gray-900" id="currentContentTitle">사업개요</h2>
             </div>
             <div class="flex items-center gap-3">
                 <button id="editToggleBtnDesktop" onclick="toggleEditMode()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition-all active:scale-95">
@@ -130,7 +226,7 @@
         </footer>
     </main>
 
-    <!-- 이미지 확대 모달 -->
+    <!-- 7. 이미지 확대 모달 -->
     <div id="imageZoomModal" class="hidden fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-2 select-none" onclick="closeZoomModal()">
         <button onclick="closeZoomModal()" class="absolute top-4 right-5 text-white/80 hover:text-white bg-slate-800/80 p-2.5 rounded-full z-50 flex items-center justify-center w-10 h-10 shadow-lg">
             <i class="fa-solid fa-xmark text-xl"></i>
@@ -140,6 +236,20 @@
         </div>
     </div>
 
+    <!-- 스크립트 연결 -->
     <script src="script.js"></script>
+    <script>
+      function toggleAuthMode(mode) {
+        if(mode === 'signup') {
+          document.getElementById('loginForm').classList.add('hidden');
+          document.getElementById('signupForm').classList.remove('hidden');
+          document.getElementById('signupForm').classList.add('flex');
+        } else {
+          document.getElementById('signupForm').classList.add('hidden');
+          document.getElementById('loginForm').classList.remove('hidden');
+          document.getElementById('loginForm').classList.add('flex');
+        }
+      }
+    </script>
 </body>
 </html>
