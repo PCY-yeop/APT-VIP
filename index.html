@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>VIP 브리핑북</title>
     
+    <!-- PWA 및 모바일 최적화 메타 설정 -->
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,7 +13,15 @@
     <meta name="apple-mobile-web-app-title" content="VIP 브리핑북">
     <meta name="theme-color" content="#0d1b3e">
     
-    <!-- Supabase SDK -->
+    <!-- 카카오톡 및 SNS 공유 Open Graph 미리보기 메타 태그 -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="VIP 프라이빗 브리핑북 시스템">
+    <meta property="og:description" content="스마트 분양 현장 맞춤형 프라이빗 브리핑북 시스템입니다.">
+    <meta property="og:image" content="images/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- 외부 라이브러리 (Supabase, Tailwind, FontAwesome, SortableJS) CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -21,11 +30,10 @@
 
     <script>
       // ====================================================
-      // [★ Supabase 설정 정보 ★]
+      // [★ Supabase 클라이언트 설정 ★]
       // ====================================================
-    const SUPABASE_URL = "https://lmkpwupeinkqbfmhqcrc.supabase.co";       // <--- 본인 Supabase Project URL 입력
-    const SUPABASE_ANON_KEY = "sb_publishable_BrgcLKyjLU7et47zEocZdQ_mNvmFNbo";     // <--- 본인 게시 가능한 키(anon key) 입력
-        
+      const SUPABASE_URL = "https://lmkpwupeinkqbfmhqcrc.supabase.co";
+      const SUPABASE_ANON_KEY = "sb_publishable_BrgcLKyjLU7et47zEocZdQ_mNvmFNbo";
 
       if (typeof supabase !== 'undefined' && SUPABASE_URL && SUPABASE_ANON_KEY) {
           window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -35,9 +43,8 @@
 
 <body class="bg-slate-950 text-gray-800 h-screen w-screen overflow-hidden flex flex-col md:flex-row select-none">
 
-    <!-- 1. 단정하고 고급스러운 전용 로그인 화면 (흐릿한 비침 제거) -->
+    <!-- 1. 단정하고 고급스러운 전용 로그인 화면 -->
     <div id="authModal" class="fixed inset-0 bg-gradient-to-br from-slate-950 via-[#0d1b3e] to-slate-900 z-50 flex items-center justify-center p-4">
-        <!-- 은은한 원형 조명 효과 배경 -->
         <div class="absolute w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div class="relative bg-slate-900/90 border border-slate-800/80 rounded-3xl p-7 md:p-9 w-full max-w-sm shadow-2xl shadow-emerald-950/20 text-white backdrop-blur-none">
@@ -60,7 +67,6 @@
                     <input type="password" id="authPassword" required placeholder="비밀번호 입력" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600 transition-colors">
                 </div>
                 
-                <!-- 로그인 상태 유지 체크박스 -->
                 <div class="flex items-center gap-2 py-0.5">
                     <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-600 focus:ring-0 cursor-pointer" checked>
                     <label for="rememberMe" class="text-xs text-slate-300 cursor-pointer font-medium">로그인 상태 유지하기</label>
@@ -97,7 +103,7 @@
         </div>
     </div>
 
-    <!-- 2. 전체 화면 고급 대시보드 (로비) -->
+    <!-- 2. 전체 화면 대시보드 (로비) -->
     <div id="siteLobbyModal" class="hidden fixed inset-0 bg-slate-950 z-40 flex flex-col p-6 md:p-10 overflow-hidden">
         <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 max-w-6xl w-full mx-auto pb-6 border-b border-slate-800/80">
             <div class="flex items-center gap-3.5">
@@ -153,8 +159,13 @@
                 <button onclick="showLobbyModal()" class="text-slate-300 hover:text-white p-1 mr-1" title="로비로 돌아가기">
                     <i class="fa-solid fa-house text-sm"></i>
                 </button>
-                <div class="relative group">
-                    <img id="mobileLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/120x40/0d1b3e/ffffff?text=LOGO';" class="h-7 w-auto object-contain">
+                <!-- 모바일 로고 및 편집 모드 변경 버튼 -->
+                <div class="relative flex items-center h-8 px-2 bg-white/5 rounded-lg border border-white/10 overflow-hidden group">
+                    <img id="mobileLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/120x40/0d1b3e/ffffff?text=LOGO';" class="max-h-6 w-auto object-contain">
+                    <label id="mobileLogoEditBtn" class="hidden absolute inset-0 bg-slate-900/90 flex items-center justify-center text-[10px] text-emerald-400 font-bold cursor-pointer">
+                        <i class="fa-solid fa-camera mr-1"></i> 변경
+                        <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
+                    </label>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -179,8 +190,16 @@
     <!-- 5. PC 좌측 사이드바 -->
     <aside class="hidden md:flex w-56 raon-main text-white flex-col justify-between items-center py-5 px-3 flex-shrink-0 z-20 shadow-xl h-full">
         <div class="w-full flex flex-col items-center flex-1 min-h-0">
-            <div class="mb-5 text-center px-1 flex-shrink-0 relative group w-full">
-                <img id="desktopLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/160x60/0d1b3e/ffffff?text=LOGO';" class="max-h-14 w-auto mx-auto mb-1.5 object-contain">
+            <!-- PC 로고 및 편집 모드 변경 버튼 -->
+            <div class="mb-5 text-center px-1 flex-shrink-0 w-full">
+                <div class="flex flex-col items-center justify-center p-3 bg-white/5 rounded-2xl border border-white/10 shadow-inner relative overflow-hidden group min-h-[64px]">
+                    <img id="desktopLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/160x60/0d1b3e/ffffff?text=LOGO';" class="max-h-12 w-auto object-contain mx-auto">
+                    <label id="desktopLogoEditBtn" class="hidden absolute inset-0 bg-slate-900/90 flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-bold cursor-pointer transition-all hover:bg-slate-950">
+                        <i class="fa-solid fa-camera"></i>
+                        <span>로고 이미지 변경</span>
+                        <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
+                    </label>
+                </div>
             </div>
             <nav class="w-full flex flex-col gap-2.5 overflow-y-auto flex-1 pr-1" id="primaryNavDesktop"></nav>
         </div>
