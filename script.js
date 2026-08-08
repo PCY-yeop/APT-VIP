@@ -135,42 +135,38 @@ function compressImage(file, maxWidth = 1200, quality = 0.75) {
     });
 }
 
-// Supabase Storage 버킷 저장 또는 초경량 압축 Base64 변환
+// Supabase Storage 버킷에 이미지 업로드 (base64 폴백 없음 - 실패 시 명확한 에러 발생)
 async function uploadToStorageOrCompress(file) {
-    try {
-        const compressedBase64 = await compressImage(file, 1200, 0.75);
-        
-        if (window.supabaseClient && window.supabaseClient.storage) {
-            try {
-                const response = await fetch(compressedBase64);
-                const blob = await response.blob();
-                const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
+    const compressedBase64 = await compressImage(file, 1200, 0.75);
 
-                const { data, error } = await window.supabaseClient
-                    .storage
-                    .from('briefing-images')
-                    .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
-
-                if (!error && data) {
-                    const { data: publicUrlData } = window.supabaseClient
-                        .storage
-                        .from('briefing-images')
-                        .getPublicUrl(fileName);
-
-                    if (publicUrlData && publicUrlData.publicUrl) {
-                        return publicUrlData.publicUrl;
-                    }
-                }
-            } catch (storageErr) {
-                console.warn("Storage upload fallback to compressed base64");
-            }
-        }
-        
-        return compressedBase64;
-    } catch (e) {
-        console.error("Image processing error:", e);
-        throw e;
+    if (!window.supabaseClient || !window.supabaseClient.storage) {
+        throw new Error("클라우드 저장소(Supabase Storage)에 연결되어 있지 않습니다.");
     }
+
+    const response = await fetch(compressedBase64);
+    const blob = await response.blob();
+    const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
+
+    const { data, error } = await window.supabaseClient
+        .storage
+        .from('briefing-images')
+        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+
+    if (error || !data) {
+        console.error("Storage 업로드 실패:", error);
+        throw new Error("이미지 업로드에 실패했습니다. Storage 버킷 설정을 확인해 주세요.");
+    }
+
+    const { data: publicUrlData } = window.supabaseClient
+        .storage
+        .from('briefing-images')
+        .getPublicUrl(fileName);
+
+    if (!publicUrlData || !publicUrlData.publicUrl) {
+        throw new Error("업로드된 이미지의 URL을 가져오지 못했습니다.");
+    }
+
+    return publicUrlData.publicUrl;
 }
 
 function forceHideLoadingScreen() {
@@ -612,7 +608,7 @@ async function changeSiteLogo(event) {
         await saveCurrentSiteData();
         showToast("로고 이미지가 성공적으로 변경되었습니다.");
     } catch(err) {
-        showToast("로고 변경 중 오류가 발생했습니다.", true);
+        showToast("로고 변경 실패: " + (err.message || "다시 시도해 주세요."), true);
     }
     event.target.value = '';
 }
@@ -912,7 +908,7 @@ async function addImageToCurrentSub(event) {
         renderContent();
         showToast("이미지가 성공적으로 저장되었습니다!");
     } catch(err) {
-        showToast("이미지 업로드 중 오류가 발생했습니다.", true);
+        showToast("이미지 업로드 실패: " + (err.message || "다시 시도해 주세요."), true);
     }
     event.target.value = '';
 }
