@@ -23,6 +23,9 @@ let touchState = { scale: 1, startDist: 0, posX: 0, posY: 0, startX: 0, startY: 
 let editingSiteId = null;
 let isSplashFinished = false;
 
+// 현장 데이터 메모리 캐시 (0초 즉시 로딩용)
+const siteCache = new Map();
+
 // 모든 메인 및 서브 목차 데이터 구조 보정 (고유 ID 및 로고 데이터 할당)
 function normalizeSiteData(data) {
     if (!data || typeof data !== 'object') return { _logoUrl: 'images/rogo.png', _categoryOrder: [] };
@@ -135,38 +138,42 @@ function compressImage(file, maxWidth = 1200, quality = 0.75) {
     });
 }
 
-// Supabase Storage 버킷에 이미지 업로드 (base64 폴백 없음 - 실패 시 명확한 에러 발생)
+// Supabase Storage 버킷 저장 또는 초경량 압축 Base64 변환
 async function uploadToStorageOrCompress(file) {
-    const compressedBase64 = await compressImage(file, 1200, 0.75);
+    try {
+        const compressedBase64 = await compressImage(file, 1200, 0.75);
+        
+        if (window.supabaseClient && window.supabaseClient.storage) {
+            try {
+                const response = await fetch(compressedBase64);
+                const blob = await response.blob();
+                const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
 
-    if (!window.supabaseClient || !window.supabaseClient.storage) {
-        throw new Error("클라우드 저장소(Supabase Storage)에 연결되어 있지 않습니다.");
+                const { data, error } = await window.supabaseClient
+                    .storage
+                    .from('briefing-images')
+                    .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+
+                if (!error && data) {
+                    const { data: publicUrlData } = window.supabaseClient
+                        .storage
+                        .from('briefing-images')
+                        .getPublicUrl(fileName);
+
+                    if (publicUrlData && publicUrlData.publicUrl) {
+                        return publicUrlData.publicUrl;
+                    }
+                }
+            } catch (storageErr) {
+                console.warn("Storage upload fallback to compressed base64");
+            }
+        }
+        
+        return compressedBase64;
+    } catch (e) {
+        console.error("Image processing error:", e);
+        throw e;
     }
-
-    const response = await fetch(compressedBase64);
-    const blob = await response.blob();
-    const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
-
-    const { data, error } = await window.supabaseClient
-        .storage
-        .from('briefing-images')
-        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
-
-    if (error || !data) {
-        console.error("Storage 업로드 실패:", error);
-        throw new Error("이미지 업로드에 실패했습니다. Storage 버킷 설정을 확인해 주세요.");
-    }
-
-    const { data: publicUrlData } = window.supabaseClient
-        .storage
-        .from('briefing-images')
-        .getPublicUrl(fileName);
-
-    if (!publicUrlData || !publicUrlData.publicUrl) {
-        throw new Error("업로드된 이미지의 URL을 가져오지 못했습니다.");
-    }
-
-    return publicUrlData.publicUrl;
 }
 
 function forceHideLoadingScreen() {
@@ -262,6 +269,7 @@ async function logout() {
         await window.supabaseClient.auth.signOut();
     }
     currentUser = null;
+    siteCache.clear();
     showAuthModal();
 }
 
@@ -332,21 +340,26 @@ async function loadUserSites() {
 
     container.innerHTML = `<div class="col-span-full text-center text-slate-400 py-16"><i class="fa-solid fa-spinner fa-spin mr-2 text-emerald-400 text-lg"></i><p class="text-xs mt-2">분양 현장 목록을 불러오는 중...</p></div>`;
 
-    if (!window.supabaseClient) {
+    if (!window.supabaseClient || !currentUser) {
         userSites = [];
         renderSiteList();
         return;
     }
 
     try {
+        // [사용자별 분리] 현재 로그인한 user_id가 만든 현장만 가져오기
         let { data, error } = await window.supabaseClient
             .from('sites')
             .select('id, name, created_at')
+            .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
         if (error) {
             console.warn("created_at 정렬 조회 실패, 기본 조회 시도:", error);
-            const fallback = await window.supabaseClient.from('sites').select('id, name');
+            const fallback = await window.supabaseClient
+                .from('sites')
+                .select('id, name')
+                .eq('user_id', currentUser.id);
             data = fallback.data;
             error = fallback.error;
         }
@@ -520,6 +533,7 @@ async function deleteSite(siteId, event) {
                 return;
             }
         }
+        siteCache.delete(siteId);
         showToast("현장이 삭제되었습니다.");
         loadUserSites();
     };
@@ -533,6 +547,26 @@ async function deleteSite(siteId, event) {
 
 async function selectSite(siteId) {
     currentSiteId = siteId;
+
+    // [캐싱 기능] 이미 로드된 현장은 0초 만에 캐시에서 가져옵니다
+    if (siteCache.has(siteId)) {
+        const cachedData = siteCache.get(siteId);
+        siteData = normalizeSiteData(cachedData.data || {});
+        isEditMode = false;
+        resetEditUI();
+        updateLogoDisplay();
+
+        const keys = getMainKeys();
+        currentMain = keys.length > 0 ? keys[0] : null;
+        currentSubIndex = 0;
+
+        const splashTitle = document.getElementById('splashSiteTitle');
+        if (splashTitle) splashTitle.innerText = cachedData.name || '';
+
+        document.getElementById('siteLobbyModal')?.classList.add('hidden');
+        initNav();
+        return;
+    }
 
     const cardEl = document.getElementById(`siteCard_${siteId}`);
     if (cardEl) {
@@ -552,6 +586,7 @@ async function selectSite(siteId) {
 
             if (!error && data) {
                 site = data;
+                siteCache.set(siteId, data);
             }
         }
 
@@ -583,6 +618,13 @@ async function selectSite(siteId) {
 
 async function saveCurrentSiteData() {
     if (!currentSiteId || !window.supabaseClient) return;
+
+    // 메모리 캐시 갱신
+    if (siteCache.has(currentSiteId)) {
+        const cached = siteCache.get(currentSiteId);
+        cached.data = siteData;
+    }
+
     try {
         await window.supabaseClient
             .from('sites')
