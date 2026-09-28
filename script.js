@@ -104,9 +104,9 @@ function showToast(message, isError = false) {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
-
-// 고성능 이미지 자동 압축
-function compressImage(file, maxWidth = 1200, quality = 0.75) {
+// ====================================================
+// 고성능 이미지 자동 압축 (가로 1920px, 화질 90%로 원본급 화질 보존)
+function compressImage(file, maxWidth = 1920, quality = 0.90) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -141,7 +141,8 @@ function compressImage(file, maxWidth = 1200, quality = 0.75) {
 // Supabase Storage 버킷 저장 또는 초경량 압축 Base64 변환
 async function uploadToStorageOrCompress(file) {
     try {
-        const compressedBase64 = await compressImage(file, 1200, 0.75);
+        // [FHD 고화질 적용] 가로 1920px, 품질 90% 설정으로 선명한 도면 및 글자 보존
+        const compressedBase64 = await compressImage(file, 1920, 1);
         
         if (window.supabaseClient && window.supabaseClient.storage) {
             try {
