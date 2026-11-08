@@ -4,30 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>VIP 브리핑북</title>
-    
+
     <!-- PWA 및 모바일 최적화 메타 설정 -->
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="VIP 브리핑북">
-    <meta name="theme-color" content="#0d1b3e">
-    
+    <meta name="theme-color" content="#0a0f1c">
+    <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
+
     <!-- 카카오톡 및 SNS 공유 Open Graph 미리보기 메타 태그 -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="VIP 프라이빗 브리핑북 시스템">
     <meta property="og:description" content="스마트 분양 현장 맞춤형 프라이빗 브리핑북 시스템입니다.">
-    <meta property="og:image" content="images/og-image.png">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
+    <meta property="og:image" content="images/rogo.png">
+
+    <!-- 폰트: Pretendard(본문/UI) + Noto Serif KR(챕터 타이틀) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700;900&display=swap">
 
     <!-- 외부 라이브러리 (Supabase, Tailwind, FontAwesome, SortableJS) CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <link rel="stylesheet" href="css/desktop.css">
-    <link rel="manifest" href="manifest.json">
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <link rel="stylesheet" href="css/desktop.css?v=12">
     <link rel="apple-touch-icon" href="images/rogo.png">
 
     <script>
@@ -37,227 +41,269 @@
       const SUPABASE_URL = "https://lmkpwupeinkqbfmhqcrc.supabase.co";
       const SUPABASE_ANON_KEY = "sb_publishable_BrgcLKyjLU7et47zEocZdQ_mNvmFNbo";
 
-      if (typeof supabase !== 'undefined' && SUPABASE_URL && SUPABASE_ANON_KEY) {
-          window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      }
+      // defer 스크립트가 모두 실행된 뒤(DOMContentLoaded)에 클라이언트 생성 - CDN이 느려도 화면은 먼저 뜬다
+      document.addEventListener('DOMContentLoaded', function () {
+          try {
+              if (typeof supabase !== 'undefined' && SUPABASE_URL && SUPABASE_ANON_KEY) {
+                  window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+              }
+          } catch (e) { console.error('Supabase init error:', e); }
+      });
     </script>
 </head>
 
-<body class="bg-slate-950 text-gray-800 h-screen w-screen overflow-hidden flex flex-col md:flex-row select-none">
+<body class="bb-root h-screen w-screen overflow-hidden flex flex-col md:flex-row select-none">
 
-    <!-- 1. 단정하고 고급스러운 전용 로그인 화면 -->
-    <div id="authModal" class="fixed inset-0 bg-gradient-to-br from-slate-950 via-[#0d1b3e] to-slate-900 z-50 flex items-center justify-center p-4">
-        <div class="absolute w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <!-- 배경 오로라 (전 화면 공통 장식) -->
+    <div class="bb-aurora" aria-hidden="true">
+        <span class="bb-orb bb-orb--a"></span>
+        <span class="bb-orb bb-orb--b"></span>
+        <span class="bb-grain"></span>
+    </div>
 
-        <div class="relative bg-slate-900/90 border border-slate-800/80 rounded-3xl p-7 md:p-9 w-full max-w-sm shadow-2xl shadow-emerald-950/20 text-white backdrop-blur-none">
-            <div class="text-center mb-6">
-                <div class="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl mx-auto flex items-center justify-center mb-3">
-                    <i class="fa-solid fa-folder-tree text-emerald-400 text-xl"></i>
+    <!-- 1. 전용 로그인 화면 -->
+    <div id="authModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bb-auth">
+        <div class="bb-auth__brand hidden md:flex">
+            <div class="bb-auth__brand-inner">
+                <img src="images/rogo.png" alt="로고" onerror="this.onerror=null;this.style.display='none';" class="bb-auth__logo">
+                <p class="bb-auth__eyebrow">VIP PRIVATE BRIEFING SYSTEM</p>
+                <h2 class="bb-auth__headline">한 권의<br>브리핑북으로<br>완성되는 상담</h2>
+                <p class="bb-auth__desc">분양 현장의 모든 자료를 하나의 북으로.<br>손님 앞 태블릿에서 바로 꺼내 보여주는<br>프라이빗 브리핑 시스템입니다.</p>
+                <div class="bb-auth__ticks">
+                    <span><i class="fa-solid fa-cloud-arrow-up"></i> 클라우드 자동 동기화</span>
+                    <span><i class="fa-solid fa-hand-pointer"></i> 태블릿 터치 최적화</span>
+                    <span><i class="fa-solid fa-lock"></i> 계정별 프라이빗 보관</span>
                 </div>
-                <h2 class="text-xl font-extrabold tracking-tight text-white">VIP 브리핑북 시스템</h2>
-                <p class="text-xs text-slate-400 mt-1">등록된 아이디로 안전하게 로그인하세요.</p>
             </div>
+        </div>
 
-            <!-- 로그인 폼 -->
-            <form id="loginForm" class="flex flex-col gap-3.5">
-                <div>
-                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">아이디</label>
-                    <input type="text" id="authUserId" required placeholder="아이디 입력" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600 transition-colors">
-                </div>
-                <div>
-                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">비밀번호</label>
-                    <input type="password" id="authPassword" required placeholder="비밀번호 입력" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600 transition-colors">
-                </div>
-                
-                <div class="flex items-center gap-2 py-0.5">
-                    <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-600 focus:ring-0 cursor-pointer" checked>
-                    <label for="rememberMe" class="text-xs text-slate-300 cursor-pointer font-medium">로그인 상태 유지하기</label>
+        <div class="bb-auth__panel-wrap">
+            <div class="bb-auth__panel">
+                <div class="md:hidden text-center mb-6">
+                    <img src="images/rogo.png" alt="로고" onerror="this.onerror=null;this.src='https://placehold.co/200x70/0a0f1c/ffffff?text=VIP+BRIEFING';" class="h-12 w-auto mx-auto mb-2 object-contain">
+                    <p class="text-[10px] tracking-[0.25em] text-white/40 font-semibold">VIP PRIVATE BRIEFING SYSTEM</p>
                 </div>
 
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl text-xs shadow-lg shadow-emerald-950/50 mt-1 transition-all active:scale-[0.98]">
-                    로그인하기
-                </button>
-                
-                <div class="flex items-center justify-between mt-1 text-xs text-slate-400 pt-2 border-t border-slate-800/80">
-                    <span>계정이 없으신가요?</span>
-                    <button type="button" onclick="toggleAuthMode('signup')" class="text-emerald-400 font-bold hover:underline">간편 회원가입</button>
-                </div>
-            </form>
+                <!-- 로그인 폼 -->
+                <form id="loginForm" class="bb-form">
+                    <h2 class="bb-form__title">브리핑북 열기</h2>
+                    <p class="bb-form__sub">등록된 아이디로 로그인하세요.</p>
 
-            <!-- 간편 회원가입 폼 -->
-            <form id="signupForm" class="hidden flex-col gap-3.5">
-                <div>
-                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">사용할 아이디</label>
-                    <input type="text" id="signupUserId" required placeholder="영문 또는 숫자 아이디" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600">
-                </div>
-                <div>
-                    <label class="text-[11px] font-bold text-slate-300 mb-1.5 block">비밀번호</label>
-                    <input type="password" id="signupPassword" required minlength="6" placeholder="6자리 이상 입력" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white placeholder-slate-600">
-                </div>
-                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl text-xs shadow-lg mt-1 transition-all active:scale-[0.98]">
-                    3초 간편 가입 완료
-                </button>
-                <div class="flex items-center justify-between mt-1 text-xs text-slate-400 pt-2 border-t border-slate-800/80">
-                    <span>이미 계정이 있으신가요?</span>
-                    <button type="button" onclick="toggleAuthMode('login')" class="text-indigo-400 font-bold hover:underline">로그인으로 돌아가기</button>
-                </div>
-            </form>
+                    <div class="bb-field">
+                        <label class="bb-field__label" for="authUserId">아이디</label>
+                        <input type="text" id="authUserId" required placeholder="아이디 입력" autocomplete="username" class="bb-field__input">
+                    </div>
+                    <div class="bb-field">
+                        <label class="bb-field__label" for="authPassword">비밀번호</label>
+                        <input type="password" id="authPassword" required placeholder="비밀번호 입력" autocomplete="current-password" class="bb-field__input">
+                    </div>
+
+                    <div class="flex items-center gap-2 py-0.5">
+                        <input type="checkbox" id="rememberMe" class="bb-check" checked>
+                        <label for="rememberMe" class="text-xs text-white/50 cursor-pointer font-medium">로그인 상태 유지하기</label>
+                    </div>
+
+                    <button type="submit" class="bb-btn-primary">브리핑북 시작하기</button>
+
+                    <div class="flex items-center justify-between mt-1 text-xs text-white/40 pt-4 border-t border-white/8">
+                        <span>처음이신가요?</span>
+                        <button type="button" onclick="toggleAuthMode('signup')" class="bb-link">3초 간편 회원가입</button>
+                    </div>
+                </form>
+
+                <!-- 간편 회원가입 폼 -->
+                <form id="signupForm" class="bb-form hidden">
+                    <h2 class="bb-form__title">간편 회원가입</h2>
+                    <p class="bb-form__sub">아이디와 비밀번호만으로 바로 시작합니다.</p>
+
+                    <div class="bb-field">
+                        <label class="bb-field__label" for="signupUserId">사용할 아이디</label>
+                        <input type="text" id="signupUserId" required placeholder="영문 또는 숫자 아이디" autocomplete="username" class="bb-field__input">
+                    </div>
+                    <div class="bb-field">
+                        <label class="bb-field__label" for="signupPassword">비밀번호</label>
+                        <input type="password" id="signupPassword" required minlength="6" placeholder="6자리 이상 입력" autocomplete="new-password" class="bb-field__input">
+                    </div>
+
+                    <button type="submit" class="bb-btn-primary">가입하고 시작하기</button>
+
+                    <div class="flex items-center justify-between mt-1 text-xs text-white/40 pt-4 border-t border-white/8">
+                        <span>이미 계정이 있으신가요?</span>
+                        <button type="button" onclick="toggleAuthMode('login')" class="bb-link">로그인으로 돌아가기</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
     <!-- 2. 전체 화면 대시보드 (로비) -->
-    <div id="siteLobbyModal" class="hidden fixed inset-0 bg-slate-950 z-40 flex flex-col p-6 md:p-10 overflow-hidden">
-        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 max-w-6xl w-full mx-auto pb-6 border-b border-slate-800/80">
-            <div class="flex items-center gap-3.5">
-                <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
-                    <i class="fa-solid fa-layer-group text-xl text-emerald-400"></i>
-                </div>
-                <div>
-                    <h1 class="text-xl md:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                        분양 현장 대시보드
-                    </h1>
-                    <p class="text-xs text-slate-400 mt-0.5">등록된 분양 현장들을 한눈에 관리하고 브리핑북을 구성하세요.</p>
-                </div>
+    <div id="siteLobbyModal" class="hidden fixed inset-0 z-40 flex flex-col p-6 md:p-10 overflow-hidden bb-lobby">
+        <header class="bb-lobby__header">
+            <div class="bb-lobby__greeting">
+                <p class="bb-lobby__eyebrow">VIP BRIEFING BOOK</p>
+                <h1 class="bb-lobby__title">분양 현장 대시보드</h1>
+                <p class="bb-lobby__sub">현장을 선택해 브리핑북을 열거나, 새 현장을 등록하세요.</p>
             </div>
-            <div class="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-                <button onclick="logout()" class="text-slate-400 hover:text-red-400 text-xs font-semibold px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 transition-all hover:border-red-900/50">
-                    <i class="fa-solid fa-right-from-bracket mr-1"></i> 로그아웃
-                </button>
-                <button onclick="createNewSite()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-950/50 transition-all active:scale-95">
-                    <i class="fa-solid fa-plus text-xs"></i> 새 현장 등록
-                </button>
+            <div class="bb-lobby__side">
+                <div class="bb-clock">
+                    <span id="lobbyClockTime">00:00</span>
+                    <span id="lobbyClockDate">&nbsp;</span>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <button id="lobbyEditToggle" onclick="toggleLobbyEdit()" class="bb-btn-ghost">
+                        <i class="fa-solid fa-up-down-left-right"></i> 순서 편집
+                    </button>
+                    <button id="lobbyDeleteToggle" onclick="toggleLobbyDelete()" class="bb-btn-ghost bb-btn-ghost--danger">
+                        <i class="fa-solid fa-trash-can"></i> 삭제
+                    </button>
+                    <div class="bb-theme-wrap">
+                        <button onclick="toggleThemeMenu(event)" class="bb-btn-ghost" title="테마 변경">
+                            <i class="fa-solid fa-palette"></i> 테마
+                        </button>
+                        <div id="bbThemeMenu" class="bb-theme-menu hidden">
+                            <button class="bb-theme-card" data-theme="navy" onclick="bbApplyTheme('navy'); toggleThemeMenu(event)"><span class="bb-theme-dot" style="background:linear-gradient(135deg,#0a0f1c,#1b4d24)"></span> 다크 네이비</button>
+                            <button class="bb-theme-card" data-theme="light" onclick="bbApplyTheme('light'); toggleThemeMenu(event)"><span class="bb-theme-dot" style="background:linear-gradient(135deg,#f6f8fb,#d9e2ef)"></span> 라이트</button>
+                            <button class="bb-theme-card" data-theme="purple" onclick="bbApplyTheme('purple'); toggleThemeMenu(event)"><span class="bb-theme-dot" style="background:linear-gradient(135deg,#120e24,#7c3aed)"></span> 미드나잇 퍼플</button>
+                            <button class="bb-theme-card" data-theme="gold" onclick="bbApplyTheme('gold'); toggleThemeMenu(event)"><span class="bb-theme-dot" style="background:linear-gradient(135deg,#241b10,#e0b354)"></span> 웜 골드</button>
+                        </div>
+                    </div>
+                    <button onclick="logout()" class="bb-btn-ghost bb-btn-ghost--danger">
+                        <i class="fa-solid fa-right-from-bracket"></i> 로그아웃
+                    </button>
+                    <button onclick="createNewSite()" class="bb-btn-primary bb-btn-primary--sm">
+                        <i class="fa-solid fa-plus"></i> 새 현장 등록
+                    </button>
+                </div>
             </div>
         </header>
-        
-        <main class="max-w-6xl w-full mx-auto flex-1 overflow-y-auto pr-1">
+
+        <main class="bb-lobby__main">
             <div id="siteListContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pb-6"></div>
         </main>
     </div>
 
     <!-- 3. 로딩 화면 -->
-    <div id="loadingScreen" class="fixed inset-0 bg-[#0d1b3e] z-30 flex flex-col items-center justify-center p-6 text-white transition-opacity duration-500">
-        <div class="mb-6 text-center">
-            <img id="splashLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/200x70/0d1b3e/ffffff?text=VIP+BRIEFING';" class="h-12 md:h-16 w-auto mx-auto mb-3 object-contain">
-            <h1 id="splashSiteTitle" class="text-lg md:text-xl font-bold tracking-tight text-slate-100">분양 현장 브리핑북</h1>
-            <p class="text-xs text-slate-400 mt-1">VIP 프라이빗 브리핑 시스템</p>
-        </div>
-        <div class="w-full max-w-xs bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-2xl flex flex-col items-center">
-            <div class="flex justify-between items-center w-full mb-2">
-                <span id="loadingStatusText" class="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
-                    <i class="fa-solid fa-spinner fa-spin"></i> 브리핑 자료 준비 중...
-                </span>
-                <span id="loadingPercent" class="text-sm font-extrabold text-white">0%</span>
-            </div>
-            <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
-                <div id="loadingProgressBar" class="h-full bg-emerald-500 w-0 transition-all duration-150 rounded-full"></div>
+    <div id="loadingScreen" class="fixed inset-0 z-30 flex flex-col items-center justify-center p-6 bb-splash">
+        <div class="bb-splash__inner">
+            <img id="splashLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/200x70/0a0f1c/ffffff?text=VIP+BRIEFING';" class="h-12 md:h-16 w-auto mx-auto mb-4 object-contain">
+            <h1 id="splashSiteTitle" class="bb-splash__title">분양 현장 브리핑북</h1>
+            <p class="bb-splash__sub">VIP 프라이빗 브리핑 시스템</p>
+            <div class="bb-splash__bar">
+                <div class="bb-splash__bar-head">
+                    <span id="loadingStatusText" class="bb-splash__status"><i class="fa-solid fa-spinner fa-spin"></i> 브리핑 자료 준비 중...</span>
+                    <span id="loadingPercent" class="bb-splash__percent">0%</span>
+                </div>
+                <div class="bb-splash__track"><div id="loadingProgressBar" class="bb-splash__fill"></div></div>
             </div>
         </div>
     </div>
 
     <!-- 4. 모바일 상단 레이아웃 -->
-    <div class="flex flex-col md:hidden flex-shrink-0 z-20 raon-main text-white shadow-md">
-        <div class="h-12 px-4 flex items-center justify-between border-b border-white/10">
+    <div class="flex flex-col md:hidden flex-shrink-0 z-20 bb-topbar">
+        <div class="bb-topbar__row">
             <div class="flex items-center gap-2">
-                <button onclick="showLobbyModal()" class="text-slate-300 hover:text-white p-1 mr-1" title="로비로 돌아가기">
+                <button onclick="showLobbyModal()" class="bb-icon-btn" title="로비로 돌아가기">
                     <i class="fa-solid fa-house text-sm"></i>
                 </button>
-                <!-- 모바일 로고 및 편집 모드 변경 버튼 -->
-                <div class="relative flex items-center h-8 px-2 bg-white/5 rounded-lg border border-white/10 overflow-hidden group">
-                    <img id="mobileLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/120x40/0d1b3e/ffffff?text=LOGO';" class="max-h-6 w-auto object-contain">
-                    <label id="mobileLogoEditBtn" class="hidden absolute inset-0 bg-slate-900/90 flex items-center justify-center text-[10px] text-emerald-400 font-bold cursor-pointer">
+                <div class="relative flex items-center h-8 px-2 bb-logo-chip overflow-hidden">
+                    <img id="mobileLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/120x40/0a0f1c/ffffff?text=LOGO';" class="max-h-6 w-auto object-contain">
+                    <label id="mobileLogoEditBtn" class="hidden absolute inset-0 bb-logo-edit flex items-center justify-center text-[10px] font-bold cursor-pointer">
                         <i class="fa-solid fa-camera mr-1"></i> 변경
-                        <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
+                        <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="changeSiteLogo(event)">
                     </label>
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <button id="editToggleBtnMobile" onclick="toggleEditMode()" class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow">
+                <button id="editToggleBtnMobile" onclick="toggleEditMode()" class="bb-btn-edit bb-btn-edit--sm">
                     <i class="fa-solid fa-pen-to-square"></i>
                     <span id="editToggleTextMobile">편집하기</span>
                 </button>
-                <button onclick="toggleFullScreen()" class="text-slate-300 p-1.5 text-xs">
+                <button onclick="toggleFullScreen()" class="bb-icon-btn" title="전체화면">
                     <i class="fa-solid fa-expand"></i>
                 </button>
             </div>
         </div>
-        <nav class="flex overflow-x-auto gap-1.5 p-2 no-scrollbar bg-slate-900/50 border-b border-white/5" id="primaryNavMobile"></nav>
-        <div class="flex items-center justify-between gap-2 px-2 py-1.5 bg-slate-800/90 overflow-x-auto no-scrollbar">
+        <nav class="flex overflow-x-auto gap-1.5 p-2 no-scrollbar" id="primaryNavMobile"></nav>
+        <div class="flex items-center justify-between gap-2 px-2 py-1.5 overflow-x-auto no-scrollbar bb-topbar__sub">
             <div class="flex gap-1.5 overflow-x-auto no-scrollbar flex-1" id="secondaryNavMobile"></div>
-            <button onclick="openZoomModal()" type="button" class="flex-shrink-0 py-1 px-2.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shadow">
+            <button onclick="openZoomModal()" type="button" class="bb-btn-zoom bb-btn-zoom--sm">
                 <i class="fa-solid fa-magnifying-glass-plus"></i> 크게보기
             </button>
         </div>
     </div>
 
-    <!-- 5. PC 좌측 사이드바 -->
-    <aside class="hidden md:flex w-56 raon-main text-white flex-col justify-between items-center py-5 px-3 flex-shrink-0 z-20 shadow-xl h-full">
+    <!-- 5. PC 좌측 사이드바 (목차 스파인) -->
+    <aside class="hidden md:flex w-60 bb-spine flex-col justify-between items-center py-5 px-3 flex-shrink-0 z-20 h-full">
         <div class="w-full flex flex-col items-center flex-1 min-h-0">
-            <!-- PC 로고 및 편집 모드 변경 버튼 -->
-            <div class="mb-5 text-center px-1 flex-shrink-0 w-full">
-                <div class="flex flex-col items-center justify-center p-3 bg-white/5 rounded-2xl border border-white/10 shadow-inner relative overflow-hidden group min-h-[64px]">
-                    <img id="desktopLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/160x60/0d1b3e/ffffff?text=LOGO';" class="max-h-12 w-auto object-contain mx-auto">
-                    <label id="desktopLogoEditBtn" class="hidden absolute inset-0 bg-slate-900/90 flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-bold cursor-pointer transition-all hover:bg-slate-950">
+            <div class="mb-4 text-center px-1 flex-shrink-0 w-full">
+                <div class="bb-logo-chip--lg relative overflow-hidden min-h-[64px]">
+                    <img id="desktopLogo" src="images/rogo.png" alt="로고" onerror="this.onerror=null; this.src='https://placehold.co/160x60/0a0f1c/ffffff?text=LOGO';" class="max-h-12 w-auto object-contain mx-auto">
+                    <label id="desktopLogoEditBtn" class="hidden absolute inset-0 bb-logo-edit flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer">
                         <i class="fa-solid fa-camera"></i>
                         <span>로고 이미지 변경</span>
-                        <input type="file" accept="image/*" class="hidden" onchange="changeSiteLogo(event)">
+                        <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="changeSiteLogo(event)">
                     </label>
                 </div>
             </div>
-            <nav class="w-full flex flex-col gap-2.5 overflow-y-auto flex-1 pr-1" id="primaryNavDesktop"></nav>
+            <p class="bb-spine__eyebrow">CONTENTS</p>
+            <nav class="w-full flex flex-col gap-2 overflow-y-auto flex-1 pr-1 bb-spine__nav" id="primaryNavDesktop"></nav>
         </div>
 
-        <div class="w-full pt-3 border-t border-white/10 mt-auto">
-            <button onclick="showLobbyModal()" class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow border border-slate-700">
-                <i class="fa-solid fa-house text-emerald-400"></i> 현장 목록으로 이동
+        <div class="w-full pt-3 mt-auto bb-spine__foot">
+            <p class="bb-spine__hint"><i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-arrow-right"></i> 방향키 · 스와이프로 넘기기</p>
+            <button onclick="showLobbyModal()" class="bb-btn-ghost w-full">
+                <i class="fa-solid fa-house"></i> 현장 목록으로 이동
             </button>
         </div>
     </aside>
 
-    <aside class="hidden md:flex w-52 bg-slate-200 border-r border-slate-300 py-6 px-3 flex-col justify-between flex-shrink-0 z-10 shadow-inner h-full">
-        <div class="flex flex-col min-h-0 flex-1 overflow-hidden">
-            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 px-2 flex items-center justify-between flex-shrink-0">
+    <aside class="hidden md:flex w-52 bb-pages flex-col justify-between flex-shrink-0 z-10 h-full">
+        <div class="flex flex-col min-h-0 flex-1 overflow-hidden py-5 px-3">
+            <div class="bb-pages__head">
                 <span id="subCategoryTitle">세부목록</span>
+                <span id="pageIndicator" class="bb-pages__count"></span>
             </div>
-            <div class="flex flex-col gap-2 overflow-y-auto flex-1 pr-1 mb-3" id="secondaryNavDesktop"></div>
+            <div class="flex flex-col gap-1.5 overflow-y-auto flex-1 pr-1 mb-3 bb-pages__list" id="secondaryNavDesktop"></div>
         </div>
-        <div class="pt-3 border-t border-slate-300 flex-shrink-0">
-            <button onclick="openZoomModal()" type="button" class="w-full py-2.5 px-2 bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow">
-                <i class="fa-solid fa-magnifying-glass-plus text-emerald-400"></i> 이미지 크게보기
+        <div class="pt-3 flex-shrink-0 px-3 pb-4">
+            <button onclick="openZoomModal()" type="button" class="bb-btn-zoom w-full">
+                <i class="fa-solid fa-magnifying-glass-plus"></i> 이미지 크게보기
             </button>
         </div>
     </aside>
 
     <!-- 6. 메인 콘텐츠 영역 -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
-        <header class="hidden md:flex h-12 bg-white border-b border-gray-200 px-6 items-center justify-between shadow-sm flex-shrink-0">
-            <div class="flex items-center gap-3">
-                <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-md" id="currentCategoryBadge">사업안내</span>
-                <i class="fa-solid fa-chevron-right text-xs text-gray-400"></i>
-                <h2 class="text-sm md:text-base font-bold text-gray-900" id="currentContentTitle">사업개요</h2>
+    <main class="flex-1 flex flex-col h-full overflow-hidden bb-stage">
+        <header class="hidden md:flex h-12 bb-stage__head px-6 items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="bb-chapter" id="currentCategoryBadge">사업안내</span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-white/25"></i>
+                <h2 class="bb-stage__title truncate" id="currentContentTitle">사업개요</h2>
             </div>
-            <div class="flex items-center gap-3">
-                <button id="editToggleBtnDesktop" onclick="toggleEditMode()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition-all active:scale-95">
+            <div class="flex items-center gap-3 flex-shrink-0">
+                <button id="editToggleBtnDesktop" onclick="toggleEditMode()" class="bb-btn-edit">
                     <i class="fa-solid fa-pen-to-square"></i> <span id="editToggleTextDesktop">편집하기</span>
                 </button>
-                <div id="modeStatusBadge" class="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2">
+                <div id="modeStatusBadge" class="bb-mode-badge">
                     <span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>상담 전용 모드</span>
                 </div>
-                <button onclick="toggleFullScreen()" class="text-gray-600 hover:text-slate-900 text-sm p-1.5 rounded-lg hover:bg-gray-100" title="전체화면">
+                <button onclick="toggleFullScreen()" class="bb-icon-btn bb-icon-btn--light" title="전체화면">
                     <i class="fa-solid fa-expand"></i>
                 </button>
             </div>
         </header>
 
-        <section class="flex-1 p-2 md:p-4 overflow-hidden flex items-center justify-center bg-slate-900/10 relative touch-none" id="contentDisplayArea"></section>
+        <section class="flex-1 p-2 md:p-5 overflow-hidden flex items-center justify-center relative touch-none" id="contentDisplayArea"></section>
 
-        <footer class="h-4 bg-slate-800 text-slate-400 text-[9px] px-4 flex items-center justify-between flex-shrink-0 z-10">
+        <footer class="h-6 bb-stage__foot px-4 flex items-center justify-between flex-shrink-0 z-10">
             <span>※ 본 자료는 이해를 돕기 위한 브리핑 자료로 실제 인허가 과정에서 변동될 수 있습니다.</span>
+            <span class="bb-stage__foot-brand">VIP BRIEFING BOOK · v12</span>
         </footer>
     </main>
 
     <!-- 7. 이미지 확대 모달 -->
-    <div id="imageZoomModal" class="hidden fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-2 select-none" onclick="closeZoomModal()">
-        <button onclick="closeZoomModal()" class="absolute top-4 right-5 text-white/80 hover:text-white bg-slate-800/80 p-2.5 rounded-full z-50 flex items-center justify-center w-10 h-10 shadow-lg">
+    <div id="imageZoomModal" class="hidden fixed inset-0 bb-zoom flex flex-col items-center justify-center p-2 select-none" onclick="closeZoomModal()">
+        <button onclick="closeZoomModal()" class="bb-zoom__close">
             <i class="fa-solid fa-xmark text-xl"></i>
         </button>
         <div class="relative w-full h-full flex items-center justify-center p-2" onclick="event.stopPropagation()">
@@ -265,8 +311,22 @@
         </div>
     </div>
 
+    <!-- 7-1. 삭제·확인 대화상자 (예 / 아니오 이중 확인) -->
+    <div id="bbConfirmModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bb-confirm">
+        <div class="bb-confirm__backdrop"></div>
+        <div class="bb-confirm__card" role="alertdialog" aria-modal="true">
+            <div class="bb-confirm__icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h3 id="bbConfirmTitle">삭제하시겠습니까?</h3>
+            <p id="bbConfirmMessage"></p>
+            <div class="bb-confirm__actions">
+                <button id="bbConfirmCancel" class="bb-confirm__no">아니오</button>
+                <button id="bbConfirmYes" class="bb-confirm__yes">예, 삭제합니다</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 스크립트 연결 -->
-    <script src="script.js"></script>
+    <script src="script.js?v=12"></script>
     <script>
       function toggleAuthMode(mode) {
         if(mode === 'signup') {
@@ -279,6 +339,419 @@
           document.getElementById('loginForm').classList.add('flex');
         }
       }
+    </script>
+
+    <!-- ============================================================
+         [신규 기능 확장 스크립트] 기존 script.js는 수정하지 않음
+         - 활성 목차 자동 태깅(is-active) → 디자인 CSS 연동
+         - 방향키 ←/→ 및 태블릿 스와이프로 페이지 넘김
+         - 현재 페이지 표시 (p. 3 / 12)
+         - 활성 목차 자동 스크롤
+         - 로비 실시간 시계
+    ============================================================= -->
+
+    <!-- ============================================================
+         [드래그 순서 변경 강화] script.js의 정렬 초기화 함수를 새로 덮어씀
+         - 태블릿/폰: 목차를 0.2초 꾹 눌렀다가 손가락으로 끌어서 순서 변경
+           (스크롤과 충돌하지 않도록 길게 누르기 방식 적용)
+         - PC: 항목 옆 삼단 바(그립)를 마우스로 끌어서 순서 변경
+         - 메인 목차 / 서브 목차 모두 지원
+    ============================================================= -->
+    <script>
+    function bbSortableOptions(ghostClass) {
+        return {
+            handle: '.drag-handle',
+            animation: 180,
+            easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)',
+            delay: 200,              // 터치: 꾹 누른 뒤 드래그 시작 (실수 방지 + 스크롤 충돌 방지)
+            delayOnTouchOnly: true,  // PC 마우스는 즉시 드래그
+            touchStartThreshold: 8,
+            ghostClass: ghostClass,
+            chosenClass: 'bb-drag-chosen',
+            dragClass: 'bb-drag-floating',
+            filter: '.no-drag'
+        };
+    }
+
+    function initSortableEvents() {
+        if (sortablePrimaryDesktop) { try { sortablePrimaryDesktop.destroy(); } catch(e) {} sortablePrimaryDesktop = null; }
+        if (sortablePrimaryMobile) { try { sortablePrimaryMobile.destroy(); } catch(e) {} sortablePrimaryMobile = null; }
+
+        var navDesktop = document.getElementById('primaryNavDesktop');
+        if (navDesktop && isEditMode && typeof Sortable !== 'undefined') {
+            sortablePrimaryDesktop = new Sortable(navDesktop, Object.assign(bbSortableOptions('bb-main-ghost'), {
+                onEnd: function() { setTimeout(function() { updateMainOrderFromDOM(navDesktop); }, 10); }
+            }));
+        }
+
+        var navMobile = document.getElementById('primaryNavMobile');
+        if (navMobile && isEditMode && typeof Sortable !== 'undefined') {
+            sortablePrimaryMobile = new Sortable(navMobile, Object.assign(bbSortableOptions('bb-main-ghost'), {
+                onEnd: function() { setTimeout(function() { updateMainOrderFromDOM(navMobile); }, 10); }
+            }));
+        }
+    }
+
+    function initSubSortableEvents() {
+        if (sortableSecondaryDesktop) { try { sortableSecondaryDesktop.destroy(); } catch(e) {} sortableSecondaryDesktop = null; }
+        if (sortableSecondaryMobile) { try { sortableSecondaryMobile.destroy(); } catch(e) {} sortableSecondaryMobile = null; }
+
+        var subDesktop = document.getElementById('secondaryNavDesktop');
+        if (subDesktop && isEditMode && typeof Sortable !== 'undefined') {
+            sortableSecondaryDesktop = new Sortable(subDesktop, Object.assign(bbSortableOptions('bb-sub-ghost'), {
+                onEnd: function() { setTimeout(function() { updateSubOrderFromDOM(subDesktop); }, 10); }
+            }));
+        }
+
+        var subMobile = document.getElementById('secondaryNavMobile');
+        if (subMobile && isEditMode && typeof Sortable !== 'undefined') {
+            sortableSecondaryMobile = new Sortable(subMobile, Object.assign(bbSortableOptions('bb-sub-ghost'), {
+                onEnd: function() { setTimeout(function() { updateSubOrderFromDOM(subMobile); }, 10); }
+            }));
+        }
+    }
+    </script>
+    <script>
+    (function() {
+        function tagActive() {
+            document.querySelectorAll('.main-nav-item').forEach(function(el) {
+                el.classList.toggle('is-active', el.classList.contains('bg-[#1b4d24]'));
+            });
+            document.querySelectorAll('.sub-nav-item').forEach(function(el) {
+                el.classList.toggle('is-active', el.classList.contains('bg-[#0d1b3e]') || el.classList.contains('bg-slate-900'));
+            });
+
+            var active = document.querySelector('#secondaryNavDesktop .sub-nav-item.is-active, #secondaryNavMobile .sub-nav-item.is-active');
+            if (active && typeof active.scrollIntoView === 'function') {
+                active.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+            }
+
+            var pg = document.getElementById('pageIndicator');
+            if (pg) {
+                var items = Array.prototype.slice.call(document.querySelectorAll('#secondaryNavDesktop .sub-nav-item'));
+                var idx = items.findIndex(function(el) { return el.classList.contains('is-active'); });
+                pg.innerText = (items.length > 0 && idx >= 0) ? ('p. ' + (idx + 1) + ' / ' + items.length) : '';
+            }
+        }
+
+        ['primaryNavDesktop', 'primaryNavMobile', 'secondaryNavDesktop', 'secondaryNavMobile'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el && typeof MutationObserver !== 'undefined') {
+                new MutationObserver(tagActive).observe(el, { childList: true });
+            }
+        });
+        document.addEventListener('DOMContentLoaded', tagActive);
+        setInterval(tagActive, 1500);
+
+        // [편집 모드 드래그 안내 배너] 편집 시작 시 기기에 맞는 방법을 알려줌
+        var hintEl = null;
+        function updateEditHint() {
+            var isEditOn = (document.getElementById('editToggleTextMobile') || {}).innerText === '수정 완료'
+                        || (document.getElementById('editToggleTextDesktop') || {}).innerText === '수정 완료';
+            var isTouch = window.matchMedia('(pointer: coarse)').matches;
+            if (isEditOn && !hintEl) {
+                hintEl = document.createElement('div');
+                hintEl.className = 'bb-edit-hint' + (isTouch ? '' : ' bb-edit-hint--pc');
+                hintEl.innerHTML = isTouch
+                    ? '<i class="fa-solid fa-hand-pointer"></i> 목차를 꾹 눌렀다가 끌어서 순서를 바꿀 수 있어요'
+                    : '<i class="fa-solid fa-bars"></i> 항목 옆 삼단 바를 끌어서 순서를 바꿀 수 있어요';
+                document.body.appendChild(hintEl);
+            } else if (!isEditOn && hintEl) {
+                hintEl.remove();
+                hintEl = null;
+            }
+        }
+        setInterval(updateEditHint, 800);
+
+        function moveSub(dir) {
+            var lobby = document.getElementById('siteLobbyModal');
+            if (lobby && !lobby.classList.contains('hidden')) return;
+            var items = Array.prototype.slice.call(document.querySelectorAll('#secondaryNavDesktop .sub-nav-item, #secondaryNavMobile .sub-nav-item'));
+            if (!items.length) return;
+            var idx = items.findIndex(function(el) { return el.classList.contains('is-active'); });
+            var next = Math.min(Math.max(idx + dir, 0), items.length - 1);
+            if (items[next] && next !== idx) items[next].click();
+        }
+
+        document.addEventListener('keydown', function(e) {
+            var zoom = document.getElementById('imageZoomModal');
+            if (zoom && !zoom.classList.contains('hidden')) return;
+            if (e.key === 'ArrowRight') moveSub(1);
+            if (e.key === 'ArrowLeft') moveSub(-1);
+        });
+
+        var disp = document.getElementById('contentDisplayArea');
+        if (disp) {
+            var sx = null, sy = null;
+            disp.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }
+            }, { passive: true });
+            disp.addEventListener('touchend', function(e) {
+                if (sx === null) return;
+                var dx = e.changedTouches[0].clientX - sx;
+                var dy = e.changedTouches[0].clientY - sy;
+                if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) moveSub(dx < 0 ? 1 : -1);
+                sx = null;
+            }, { passive: true });
+        }
+
+        function tickClock() {
+            var t = document.getElementById('lobbyClockTime');
+            var d = document.getElementById('lobbyClockDate');
+            if (!t) return;
+            var now = new Date();
+            var h = now.getHours(), m = now.getMinutes();
+            var ampm = h < 12 ? '오전' : '오후';
+            var h12 = h % 12 === 0 ? 12 : h % 12;
+            t.innerText = ampm + ' ' + h12 + ':' + String(m).padStart(2, '0');
+            if (d) {
+                var days = ['일', '월', '화', '수', '목', '금', '토'];
+                d.innerText = (now.getMonth() + 1) + '월 ' + now.getDate() + '일 (' + days[now.getDay()] + ')';
+            }
+        }
+        tickClock();
+        setInterval(tickClock, 10000);
+    })();
+    </script>
+
+    <!-- ============================================================
+         [대시보드 기능 확장]
+         - 삭제/확인 대화상자 (예 / 아니오 이중 확인 — 현장·목차·이미지 전체 적용)
+         - 대시보드 순서 편집 모드: 순서 편집 버튼 → 카드를 잡아 끌어 순서 변경
+           (순서는 이 기기에 저장되며, Supabase에 sort_order 컬럼을 추가하면
+            기기 전체에 동기화됩니다)
+    ============================================================= -->
+    <script>
+    (function() {
+        // ---------- [1] 확인 대화상자 ----------
+        var confirmModal, confirmTitle, confirmMsg, confirmYes, confirmNo, confirmCallback = null;
+
+        window.openConfirmModal = function(title, message, onConfirm) {
+            confirmModal = confirmModal || document.getElementById('bbConfirmModal');
+            confirmTitle = confirmTitle || document.getElementById('bbConfirmTitle');
+            confirmMsg = confirmMsg || document.getElementById('bbConfirmMessage');
+            confirmYes = confirmYes || document.getElementById('bbConfirmYes');
+            confirmNo = confirmNo || document.getElementById('bbConfirmCancel');
+            if (!confirmModal) { if (typeof onConfirm === 'function') onConfirm(); return; }
+
+            confirmTitle.innerText = title || '확인';
+            confirmMsg.innerText = message || '';
+            confirmCallback = onConfirm || null;
+            confirmModal.classList.remove('hidden');
+            setTimeout(function() { if (confirmYes) confirmYes.focus(); }, 30);
+        };
+
+        function hideConfirm() {
+            if (confirmModal) confirmModal.classList.add('hidden');
+            confirmCallback = null;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var yes = document.getElementById('bbConfirmYes');
+            var no = document.getElementById('bbConfirmCancel');
+            var backdrop = document.querySelector('#bbConfirmModal .bb-confirm__backdrop');
+            if (yes) yes.addEventListener('click', function() {
+                var cb = confirmCallback; hideConfirm();
+                if (typeof cb === 'function') cb();
+            });
+            if (no) no.addEventListener('click', hideConfirm);
+            if (backdrop) backdrop.addEventListener('click', hideConfirm);
+            document.addEventListener('keydown', function(e) {
+                var m = document.getElementById('bbConfirmModal');
+                if (m && !m.classList.contains('hidden') && e.key === 'Escape') hideConfirm();
+            });
+        });
+
+        // ---------- [2] 대시보드 순서 편집 모드 ----------
+        var lobbyEditMode = false, lobbyDeleteMode = false, lobbySortable = null, sortColBroken = false;
+
+        function orderKey() {
+            return 'bb_site_order_' + ((currentUser && currentUser.id) || 'guest');
+        }
+
+        function decorateSiteCards() {
+            var container = document.getElementById('siteListContainer');
+            if (!container) return;
+            container.classList.toggle('bb-lobby-edit', lobbyEditMode);
+            container.classList.toggle('bb-lobby-delete', lobbyDeleteMode);
+            container.querySelectorAll('.group').forEach(function(card) {
+                // 관리 버튼(이름 변경/삭제)은 편집 모드에서만 노출
+                var admin = card.querySelector('.flex.justify-between.items-center.mb-4 > .flex.items-center.gap-1');
+                if (admin) admin.classList.add('bb-site-admin');
+                // 순서 편집 모드: 좌측에 잡기 손잡이 부착
+                var headRow = card.querySelector('.flex.justify-between.items-center.mb-4');
+                if (lobbyEditMode && headRow && !headRow.querySelector('.bb-site-grip')) {
+                    var grip = document.createElement('i');
+                    grip.className = 'fa-solid fa-bars bb-site-grip drag-handle';
+                    headRow.insertBefore(grip, headRow.firstChild);
+                } else if (!lobbyEditMode) {
+                    var g = card.querySelector('.bb-site-grip');
+                    if (g) g.remove();
+                }
+            });
+        }
+
+        function saveSiteOrderFromDOM() {
+            var container = document.getElementById('siteListContainer');
+            if (!container) return;
+            var ids = [];
+            container.querySelectorAll('.group[id^="siteCard_"]').forEach(function(card) {
+                ids.push(card.id.replace('siteCard_', ''));
+            });
+            if (!ids.length) return;
+            try { localStorage.setItem(orderKey(), JSON.stringify(ids)); } catch(e) {}
+
+            // [선택] 서버 동기화: sites 테이블에 sort_order 컬럼이 있으면 저장
+            if (window.supabaseClient && !sortColBroken) {
+                Promise.all(ids.map(function(id, i) {
+                    return window.supabaseClient.from('sites').update({ sort_order: i }).eq('id', id);
+                })).then(function(results) {
+                    if (results && results.some(function(r) { return r.error; })) sortColBroken = true;
+                }).catch(function() { sortColBroken = true; });
+            }
+        }
+
+        function applySavedSiteOrder() {
+            var saved;
+            try { saved = JSON.parse(localStorage.getItem(orderKey()) || '[]'); } catch(e) { return; }
+            if (!Array.isArray(saved) || !saved.length || typeof userSites === 'undefined' || !userSites.length) return;
+            var idx = new Map();
+            saved.forEach(function(id, i) { idx.set(id, i); });
+            var known = [], unknown = [];
+            userSites.forEach(function(s) { (idx.has(s.id) ? known : unknown).push(s); });
+            known.sort(function(a, b) { return idx.get(a.id) - idx.get(b.id); });
+            userSites = known.concat(unknown);
+            if (typeof renderSiteList === 'function') renderSiteList();
+        }
+
+        // 목록 로드가 끝나면 저장된 순서 적용 (원본 함수 감싸기)
+        var origLoadUserSites = window.loadUserSites;
+        window.loadUserSites = async function() {
+            if (origLoadUserSites) await origLoadUserSites.apply(this, arguments);
+            applySavedSiteOrder();
+        };
+
+        window.toggleLobbyEdit = function() {
+            lobbyEditMode = !lobbyEditMode;
+            var btn = document.getElementById('lobbyEditToggle');
+            var container = document.getElementById('siteListContainer');
+            if (!btn) return;
+
+            if (lobbyEditMode) {
+                if (lobbyDeleteMode) toggleLobbyDelete();
+                btn.classList.add('is-on');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> 순서 편집 완료';
+                decorateSiteCards();
+                if (typeof Sortable !== 'undefined' && container) {
+                    lobbySortable = new Sortable(container, {
+                        handle: '.bb-site-grip',
+                        animation: 180,
+                        easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)',
+                        delay: 200,
+                        delayOnTouchOnly: true,
+                        touchStartThreshold: 8,
+                        ghostClass: 'bb-sub-ghost',
+                        chosenClass: 'bb-drag-chosen',
+                        dragClass: 'bb-drag-floating'
+                    });
+                }
+                if (typeof showToast === 'function') showToast('카드를 잡아끌어 현장 순서를 바꿔보세요.');
+            } else {
+                btn.classList.remove('is-on');
+                btn.innerHTML = '<i class="fa-solid fa-up-down-left-right"></i> 순서 편집';
+                if (lobbySortable) { try { lobbySortable.destroy(); } catch(e) {} lobbySortable = null; }
+                decorateSiteCards();
+                saveSiteOrderFromDOM();
+                if (typeof showToast === 'function') showToast('현장 순서가 저장되었습니다.');
+            }
+        };
+
+        window.toggleLobbyDelete = function() {
+            lobbyDeleteMode = !lobbyDeleteMode;
+            if (lobbyDeleteMode && lobbyEditMode) toggleLobbyEdit();
+            var btn = document.getElementById('lobbyDeleteToggle');
+            var container = document.getElementById('siteListContainer');
+            if (!btn || !container) return;
+            btn.classList.toggle('is-on', lobbyDeleteMode);
+            btn.innerHTML = lobbyDeleteMode
+                ? '<i class="fa-solid fa-xmark"></i> 삭제 취소'
+                : '<i class="fa-solid fa-trash-can"></i> 삭제';
+            container.classList.toggle('bb-lobby-delete', lobbyDeleteMode);
+            if (lobbyDeleteMode && typeof showToast === 'function') showToast('삭제할 현장 카드의 휴지통 버튼을 누르세요.');
+        };
+
+        // 렌더 후마다 카드 꾸미기 유지
+        var listContainer = document.getElementById('siteListContainer');
+        if (listContainer && typeof MutationObserver !== 'undefined') {
+            new MutationObserver(decorateSiteCards).observe(listContainer, { childList: true });
+        }
+        document.addEventListener('DOMContentLoaded', decorateSiteCards);
+    })();
+
+    // ---------- [3] 테마 드롭다운 메뉴 ----------
+    window.toggleThemeMenu = function(e) {
+        if (e) e.stopPropagation();
+        document.getElementById('bbThemeMenu')?.classList.toggle('hidden');
+    };
+
+    document.addEventListener('click', function(e) {
+        var menu = document.getElementById('bbThemeMenu');
+        if (menu && !menu.classList.contains('hidden') && !e.target.closest('.bb-theme-wrap')) {
+            menu.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        var menu = document.getElementById('bbThemeMenu');
+        if (menu && !menu.classList.contains('hidden') && e.key === 'Escape') toggleThemeMenu();
+    });
+
+    // ---------- [3-2] 화면 전환 정리: 현장 진입 시 대시보드 즉시 가림 ----------
+    document.addEventListener('DOMContentLoaded', function() {
+        var origSelectSite = window.selectSite;
+        if (typeof origSelectSite !== 'function') return;
+        window.selectSite = async function(siteId) {
+            var lobby = document.getElementById('siteLobbyModal');
+            var splash = document.getElementById('loadingScreen');
+            var visible = lobby && !lobby.classList.contains('hidden');
+            if (visible && splash) {
+                lobby.classList.add('hidden');
+                splash.classList.remove('hidden');
+                splash.classList.remove('opacity-0');
+                splash.style.display = '';
+                var title = document.getElementById('splashSiteTitle');
+                var site = (typeof userSites !== 'undefined') ? userSites.find(function(x) { return x && x.id === siteId; }) : null;
+                if (title) title.innerText = (site && site.name) || '브리핑북';
+            }
+            try {
+                return await origSelectSite.apply(this, arguments);
+            } finally {
+                var sp = document.getElementById('loadingScreen');
+                if (sp && visible) {
+                    sp.classList.add('opacity-0');
+                    setTimeout(function() {
+                        sp.style.display = 'none';
+                        sp.classList.remove('opacity-0');
+                    }, 400);
+                }
+            }
+        };
+    });
+
+    // ---------- [4] 테마 적용 ----------
+    window.bbApplyTheme = function(theme) {
+        document.body.setAttribute('data-theme', theme);
+        try { localStorage.setItem('bb_theme', theme); } catch(e) {}
+        document.querySelectorAll('.bb-theme-card').forEach(function(card) {
+            card.classList.toggle('is-on', card.getAttribute('data-theme') === theme);
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var savedTheme = 'navy';
+        try { savedTheme = localStorage.getItem('bb_theme') || 'navy'; } catch(e) {}
+        bbApplyTheme(savedTheme);
+    });
     </script>
 </body>
 </html>

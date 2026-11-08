@@ -106,7 +106,7 @@ function showToast(message, isError = false) {
 }
 // ====================================================
 // 고성능 이미지 자동 압축 (가로 1920px, 화질 90%로 원본급 화질 보존)
-function compressImage(file, maxWidth = 1920, quality = 0.90) {
+function compressImage(file, maxWidth = 1920, quality = 0.90, mime = 'image/jpeg') {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -129,7 +129,7 @@ function compressImage(file, maxWidth = 1920, quality = 0.90) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                const compressedDataUrl = canvas.toDataURL(mime, quality);
                 resolve(compressedDataUrl);
             };
             img.onerror = (err) => reject(err);
@@ -193,27 +193,36 @@ function forceHideLoadingScreen() {
 // [1. 초기 실행 및 Supabase 인증 세션 검사]
 // ----------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
-    initAuthEvents();
-    initImageTouchEvents();
-    preloadAllImagesWithProgress();
-
+    // 1) 가장 먼저 안전 타이머 등록: 이후 코드에서 오류가 나도 2.2초 뒤엔 반드시 스플래시가 사라진다
     setTimeout(() => {
-        forceHideLoadingScreen();
+        if (currentUser) forceHideLoadingScreen();
+        else showAuthModal();
     }, 2200);
 
-    if (window.supabaseClient) {
-        try {
-            const { data: { session } } = await window.supabaseClient.auth.getSession();
-            if (session) {
-                currentUser = session.user;
-                showLobbyModal();
-            } else {
-                showAuthModal();
-            }
-        } catch(err) {
+    // 2) 초기화 함수 오류가 있어도 아래 로그인 흐름은 계속 진행
+    try {
+        initAuthEvents();
+        initImageTouchEvents();
+        preloadAllImagesWithProgress();
+    } catch (e) {
+        console.error('Init error:', e);
+    }
+
+    // 3) 세션 확인 (4초 안에 응답 없으면 로그인 화면으로)
+    if (!window.supabaseClient) {
+        showAuthModal();
+        return;
+    }
+    try {
+        const timeout = new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 4000));
+        const { data: { session } } = await Promise.race([window.supabaseClient.auth.getSession(), timeout]);
+        if (session) {
+            currentUser = session.user;
+            showLobbyModal();
+        } else {
             showAuthModal();
         }
-    } else {
+    } catch (err) {
         showAuthModal();
     }
 });
@@ -289,8 +298,7 @@ function initAuthEvents() {
             const email = `${userId}@vip.com`;
 
             if (!window.supabaseClient) {
-                currentUser = { id: userId, email: email };
-                showLobbyModal();
+                showToast("서버에 연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.", true);
                 return;
             }
 
@@ -313,8 +321,7 @@ function initAuthEvents() {
             const email = `${userId}@vip.com`;
 
             if (!window.supabaseClient) {
-                showToast(`'${userId}' 간편 가입 완료! 로그인해 주세요.`);
-                if (typeof toggleAuthMode === 'function') toggleAuthMode('login');
+                showToast("서버에 연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.", true);
                 return;
             }
 
@@ -639,13 +646,42 @@ async function saveCurrentSiteData() {
 // ----------------------------------------------------
 // [4. 로고 변경 및 화면 동기화]
 // ----------------------------------------------------
+// 로고 전용: PNG(투명 배경 유지)로 변환 저장 - 가로 최대 800px
+async function uploadLogoToStorageOrCompress(file) {
+    const pngDataUrl = await compressImage(file, 800, 1, 'image/png');
+
+    if (window.supabaseClient && window.supabaseClient.storage) {
+        try {
+            const response = await fetch(pngDataUrl);
+            const blob = await response.blob();
+            const fileName = `logo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
+
+            const { data, error } = await window.supabaseClient
+                .storage
+                .from('briefing-images')
+                .upload(fileName, blob, { contentType: 'image/png', upsert: true });
+
+            if (!error && data) {
+                const { data: publicUrlData } = window.supabaseClient
+                    .storage
+                    .from('briefing-images')
+                    .getPublicUrl(fileName);
+                if (publicUrlData && publicUrlData.publicUrl) return publicUrlData.publicUrl;
+            }
+        } catch (storageErr) {
+            console.warn("Logo storage upload fallback to base64 PNG");
+        }
+    }
+    return pngDataUrl;
+}
+
 async function changeSiteLogo(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     try {
         showToast("로고 이미지 저장 중...");
-        const logoUrl = await uploadToStorageOrCompress(file);
+        const logoUrl = await uploadLogoToStorageOrCompress(file);
         siteData._logoUrl = logoUrl;
         updateLogoDisplay();
         await saveCurrentSiteData();
