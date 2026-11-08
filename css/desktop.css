@@ -1089,3 +1089,71 @@ body[data-theme="light"] .bb-stage__foot { color: #334155; }
 
 /* [v12] 로고 영역: PNG 로고가 잘 보이도록 약간 크게, 투명 배경 PNG는 그대로 */
 #desktopLogo { max-height: 56px !important; max-width: 100%; }
+
+/* [v13] 새 버전 업데이트 안내창 */
+.bb-update {
+    position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content;
+    max-width: calc(100vw - 32px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+    z-index: 80; display: flex; align-items: center; gap: 12px;
+    padding: 14px 14px 14px 20px;
+    background: #0d1b3e; color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 18px;
+    box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    font-family: var(--bb-font-ui);
+    animation: bb-rise 0.25s cubic-bezier(0.2,0.8,0.25,1) both;
+}
+.bb-update__text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bb-update__text strong { font-size: 15px; font-weight: 800; }
+.bb-update__text span { font-size: 12px; color: rgba(255,255,255,0.72); }
+.bb-update button {
+    min-height: 44px; padding: 0 18px; border-radius: 12px; border: 0;
+    font-size: 14px; font-weight: 800; cursor: pointer; white-space: nowrap;
+    font-family: var(--bb-font-ui);
+}
+.bb-update__later { background: rgba(255,255,255,0.12); color: #ffffff; }
+.bb-update__go { background: var(--bb-brand, #2fbf8f); color: var(--bb-btn-text, #04120c); }
+@media (max-width: 520px) {
+    .bb-update { flex-wrap: wrap; width: auto; left: 16px; right: 16px; }
+    .bb-update__text { flex-basis: 100%; }
+    .bb-update button { flex: 1; }
+}
+
+/* [v14] 편집 모드: 삼단 바(순서 이동) 버튼이 흰 카드 위에서도 또렷하게 보이도록 */
+#primaryNavDesktop .main-nav-item .drag-handle,
+#secondaryNavDesktop .sub-nav-item .drag-handle {
+    color: #334155 !important;
+    background: #e6ebf3 !important;
+    border: 1px solid #b8c2d3 !important;
+    border-radius: 10px !important;
+    font-size: 18px !important;
+    padding: 10px 12px !important;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.12) !important;
+}
+#primaryNavDesktop .main-nav-item .drag-handle:hover,
+#secondaryNavDesktop .sub-nav-item .drag-handle:hover {
+    color: #0f172a !important;
+    background: #d5dce8 !important;
+}
+/* 선택된(진한 색) 항목에서는 반대로 밝게 */
+#primaryNavDesktop .main-nav-item.is-active .drag-handle,
+#secondaryNavDesktop .sub-nav-item.is-active .drag-handle {
+    color: #ffffff !important;
+    background: rgba(255,255,255,0.20) !important;
+    border-color: rgba(255,255,255,0.45) !important;
+}
+/* 연필/삭제 아이콘도 조금 진하게 */
+#primaryNavDesktop .main-nav-item:not(.is-active) .fa-pen,
+#primaryNavDesktop .main-nav-item:not(.is-active) .fa-pencil,
+#secondaryNavDesktop .sub-nav-item:not(.is-active) .fa-pen,
+#secondaryNavDesktop .sub-nav-item:not(.is-active) .fa-pencil { color: #64748b; }
+
+/* 서브목차 '추가' 버튼: 연한 배경 위에서 글자가 보이도록 */
+#secondaryNavDesktop button[class*='border-dashed'] {
+    color: var(--c-main-on) !important;
+    border-color: var(--c-main-on) !important;
+    background: rgba(255,255,255,0.55) !important;
+    font-weight: 800 !important;
+    min-height: 46px;
+}
+#secondaryNavDesktop button[class*='border-dashed']:hover { background: #ffffff !important; }

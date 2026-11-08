@@ -208,6 +208,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Init error:', e);
     }
 
+    // 업데이트 알림 체커 시작 (오류가 나도 앱 동작에는 영향 없음)
+    try { initUpdateChecker(); } catch (e) { console.error('Update checker error:', e); }
+
     // 3) 세션 확인 (4초 안에 응답 없으면 로그인 화면으로)
     if (!window.supabaseClient) {
         showAuthModal();
@@ -1411,3 +1414,95 @@ function preloadAllImagesWithProgress() {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoomModal(); });
+
+// ----------------------------------------------------
+// [앱 업데이트 알림] 새 버전 파일이 올라오면 "업데이트" 버튼이 있는 안내창을 띄움
+// - 서버의 index.html 안 APP_VERSION 값과 현재 실행 중인 값을 비교
+// - 앱을 열 때 / 앱으로 다시 돌아올 때 / 5분마다 확인
+// ----------------------------------------------------
+let updateDismissedFor = null;
+let updateChecking = false;
+
+async function checkForUpdate(manual = false) {
+    if (updateChecking) return;
+    updateChecking = true;
+    try {
+        const current = String(window.APP_VERSION || '');
+        const url = new URL('index.html', location.href);
+        url.searchParams.set('_chk', Date.now());
+        const res = await fetch(url.toString(), { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        const m = text.match(/window\.APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+        if (!m) throw new Error('version not found');
+        const remote = m[1];
+
+        if (remote !== current) {
+            if (manual || updateDismissedFor !== remote) showUpdateBanner(remote);
+        } else if (manual) {
+            showToast('최신 버전입니다 (v' + current + ')');
+        }
+    } catch (e) {
+        if (manual) showToast('업데이트 확인에 실패했습니다. 네트워크를 확인해 주세요.', true);
+    } finally {
+        updateChecking = false;
+    }
+}
+
+function showUpdateBanner(remoteVersion) {
+    if (document.getElementById('bbUpdateBanner')) return;
+    const box = document.createElement('div');
+    box.id = 'bbUpdateBanner';
+    box.className = 'bb-update';
+    box.innerHTML = `
+        <div class="bb-update__text">
+            <strong>새 버전이 있습니다</strong>
+            <span>업데이트하면 최신 화면으로 바뀝니다. (로그인은 유지됩니다)</span>
+        </div>
+        <button type="button" class="bb-update__later">나중에</button>
+        <button type="button" class="bb-update__go">업데이트</button>`;
+    box.querySelector('.bb-update__later').addEventListener('click', () => {
+        updateDismissedFor = remoteVersion;
+        box.remove();
+    });
+    box.querySelector('.bb-update__go').addEventListener('click', applyUpdate);
+    document.body.appendChild(box);
+}
+
+async function applyUpdate() {
+    if (typeof isEditMode !== 'undefined' && isEditMode) {
+        if (!confirm('편집 중인 내용이 저장되지 않았을 수 있습니다.\n그래도 업데이트할까요?')) return;
+    }
+    try {
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+        }
+    } catch (e) {}
+    try {
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            regs.forEach(r => r.unregister());
+        }
+    } catch (e) {}
+    // 주소 뒤에 매번 다른 값을 붙여 캐시를 건너뛰고 새 파일을 받아옴
+    const next = new URL(location.href);
+    next.searchParams.set('_r', Date.now());
+    location.replace(next.toString());
+}
+
+function initUpdateChecker() {
+    // 화면 하단 버전 표시를 현재 버전으로 맞추고, 누르면 수동 확인
+    const brand = document.querySelector('.bb-stage__foot-brand');
+    if (brand && window.APP_VERSION) {
+        brand.textContent = 'VIP BRIEFING BOOK · v' + window.APP_VERSION;
+        brand.style.cursor = 'pointer';
+        brand.title = '눌러서 업데이트 확인';
+        brand.addEventListener('click', () => checkForUpdate(true));
+    }
+    setTimeout(() => checkForUpdate(false), 3000);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkForUpdate(false);
+    });
+    setInterval(() => checkForUpdate(false), 5 * 60 * 1000);
+}
